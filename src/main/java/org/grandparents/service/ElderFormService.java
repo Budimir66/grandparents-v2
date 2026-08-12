@@ -87,20 +87,30 @@ public class ElderFormService {
 
         switch (state) {
             case AWAITING_ELDER_NAME -> {
-                tempElder.setFullName(text);
+                // Ограничение: 100 символов
+                tempElder.setFullName(truncateText(text, 100));
                 stateService.setState(userId, DialogState.AWAITING_CLIENT_NAME);
                 response.setText("👤 Как к вам обращаться? (например: Иван Петрович):");
                 response.addButton("❌ Отменить", "cancel_action");
             }
+
             case AWAITING_CLIENT_NAME -> {
-                tempElder.setClientFirstName(text);
+                // Ограничение: 100 символов
+                tempElder.setClientFirstName(truncateText(text, 100));
                 stateService.setState(userId, DialogState.AWAITING_ELDER_AGE);
                 response.setText("📝 Введите возраст подопечного (число):");
                 response.addButton("❌ Отменить", "cancel_action");
             }
+
             case AWAITING_ELDER_AGE -> {
                 try {
                     int age = Integer.parseInt(text);
+                    // Ограничение: возраст от 0 до 120
+                    if (age < 0 || age > 120) {
+                        response.setText("❌ Введите возраст от 0 до 120 лет:");
+                        response.addButton("❌ Отменить", "cancel_action");
+                        break;
+                    }
                     tempElder.setAge(age);
                     stateService.setState(userId, DialogState.AWAITING_ELDER_HEALTH);
                     response.setText("📝 Введите состояние здоровья (например: диабет, деменция, нужен уход):");
@@ -110,17 +120,21 @@ public class ElderFormService {
                     response.addButton("❌ Отменить", "cancel_action");
                 }
             }
+
             case AWAITING_ELDER_HEALTH -> {
-                tempElder.setHealthCondition(text);
+                // Ограничение: 255 символов
+                tempElder.setHealthCondition(truncateText(text, 255));
                 stateService.setState(userId, DialogState.AWAITING_ELDER_BUDGET);
                 response.setText("📝 Введите бюджет на месяц в рублях (например, 50000):");
                 response.addButton("❌ Отменить", "cancel_action");
             }
+
             case AWAITING_ELDER_BUDGET -> {
                 try {
                     double budget = Double.parseDouble(text);
-                    if (budget <= 0) {
-                        response.setText("❌ Бюджет должен быть положительным числом. Попробуйте снова:");
+                    // Ограничение: бюджет от 0 до 10 000 000
+                    if (budget <= 0 || budget > 10_000_000) {
+                        response.setText("❌ Введите сумму от 1000 до 10 000 000 руб.:");
                         response.addButton("❌ Отменить", "cancel_action");
                         break;
                     }
@@ -133,8 +147,10 @@ public class ElderFormService {
                     response.addButton("❌ Отменить", "cancel_action");
                 }
             }
+
             case AWAITING_ELDER_LOCATION -> {
-                tempElder.setPreferredLocation(text);
+                // Ограничение: 100 символов
+                tempElder.setPreferredLocation(truncateText(text, 100));
                 stateService.setState(userId, DialogState.AWAITING_ELDER_PHONE);
                 response.setText("📱 Введите номер телефона для связи\n\n" +
                         "Вы можете ввести номер вручную или поделиться из MAX:");
@@ -142,8 +158,10 @@ public class ElderFormService {
                 response.addButton("📱 Отправить номер из MAX", "request_contact_from_max");
                 response.addButton("❌ Отменить", "cancel_action");
             }
+
             case AWAITING_ELDER_PHONE_MANUAL -> {
                 String cleanPhone = text.replaceAll("[^0-9+]", "");
+                // Ограничение: длина телефона 10-15 символов
                 if (!cleanPhone.matches("^[+]?[0-9]{10,15}$")) {
                     response.setText("❌ Неверный формат. Введите номер в формате +7 999 123-45-67:");
                     response.addButton("❌ Отменить", "cancel_action");
@@ -154,7 +172,10 @@ public class ElderFormService {
                 response.setText("📝 Введите особые пожелания (например: первый этаж, диетическое питание):");
                 response.addButton("❌ Отменить", "cancel_action");
             }
+
             case AWAITING_ELDER_REQUIREMENTS -> {
+                // Ограничение: 255 символов
+                tempElder.setRequirements(truncateText(text, 255));
                 tempElder.setRequirements(text);
                 tempElder.setClientTelegramId(userId);
                 tempElder.setExpiresAt(LocalDateTime.now().plusDays(14));
@@ -190,7 +211,7 @@ public class ElderFormService {
             case EDITING_ELDER_NAME -> {
                 // Если пользователь ввёл текст — сохраняем его
                 if (text != null && !text.trim().isEmpty() && !text.equals("skip_edit_field")) {
-                    tempElder.setFullName(text.trim());
+                    tempElder.setFullName(truncateText(text.trim(), 100));
                 }
                 stateService.setState(userId, DialogState.EDITING_ELDER_AGE);
                 response.setText("✏️ Введите новый возраст (текущий: " + tempElder.getAge() + "):");
@@ -219,7 +240,7 @@ public class ElderFormService {
 
             case EDITING_ELDER_HEALTH -> {
                 if (text != null && !text.trim().isEmpty() && !text.equals("skip_edit_field")) {
-                    tempElder.setHealthCondition(text.trim());
+                    tempElder.setHealthCondition(truncateText(text.trim(), 255));
                 }
                 stateService.setState(userId, DialogState.EDITING_ELDER_BUDGET);
                 response.setText("✏️ Введите новый бюджет (текущий: " + tempElder.getBudget() + " руб.):");
@@ -246,7 +267,7 @@ public class ElderFormService {
 
             case EDITING_ELDER_LOCATION -> {
                 if (text != null && !text.trim().isEmpty() && !text.equals("skip_edit_field")) {
-                    tempElder.setPreferredLocation(text.trim());
+                    tempElder.setPreferredLocation(truncateText(text.trim(), 100));
                 }
                 stateService.setState(userId, DialogState.EDITING_ELDER_REQUIREMENTS);
                 response.setText("✏️ Введите новые пожелания (текущие: " + tempElder.getRequirements() + "):");
@@ -256,7 +277,7 @@ public class ElderFormService {
 
             case EDITING_ELDER_REQUIREMENTS -> {
                 if (text != null && !text.trim().isEmpty() && !text.equals("skip_edit_field")) {
-                    tempElder.setRequirements(text.trim());
+                    tempElder.setRequirements(truncateText(text.trim(), 255));
                 }
                 tempElder.setUpdatedAt(LocalDateTime.now());
                 elderService.updateElder(tempElder);
@@ -525,5 +546,13 @@ public class ElderFormService {
                 log.error("❌ Ошибка отправки администратору: {}", e.getMessage(), e);
             }
         }
+    }
+    /**
+     * Обрезает текст до указанной длины
+     */
+    private String truncateText(String text, int maxLength) {
+        if (text == null) return null;
+        if (text.length() <= maxLength) return text;
+        return text.substring(0, maxLength);
     }
 }

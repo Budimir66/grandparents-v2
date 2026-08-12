@@ -1453,7 +1453,8 @@ public class BotService {
 
             // ===== ПРЕДЛОЖЕНИЕ ПАНСИОНАТА (ШАГ 1: НАЗВАНИЕ) =====
             case AWAITING_CAREHOME_NAME_PROPOSAL -> {
-                stateService.setTempCareHomeName(userId, text);
+                stateService.setTempCareHomeName(userId, truncateText(text, 100));
+             //   stateService.setTempCareHomeName(userId, text);
                 stateService.setState(userId, DialogState.AWAITING_CAREHOME_ADDRESS_PROPOSAL);
                response = new UniversalResponse(
                         "📍 Введите **адрес** пансионата (город, улица, дом):"
@@ -1464,7 +1465,8 @@ public class BotService {
 
             // ===== ПРЕДЛОЖЕНИЕ ПАНСИОНАТА (ШАГ 2: АДРЕС) =====
             case AWAITING_CAREHOME_ADDRESS_PROPOSAL -> {
-                stateService.setTempCareHomeAddress(userId, text);
+                stateService.setTempCareHomeAddress(userId, truncateText(text, 255));
+              //  stateService.setTempCareHomeAddress(userId, text);
                 stateService.setState(userId, DialogState.AWAITING_CAREHOME_PHONE_PROPOSAL);
                 response = new UniversalResponse(
                         "📞 Введите **телефон** пансионата (в формате +7 999 123-45-67):"
@@ -1532,7 +1534,8 @@ public class BotService {
 
             // ===== ПРЕДЛОЖЕНИЕ ПАНСИОНАТА (ШАГ 6: ОПИСАНИЕ) =====
             case AWAITING_CAREHOME_DESCRIPTION_PROPOSAL -> {
-                stateService.setTempCareHomeDescription(userId, text);
+                stateService.setTempCareHomeDescription(userId, truncateText(text, 255));
+              //  stateService.setTempCareHomeDescription(userId, text);
                 stateService.setState(userId, DialogState.AWAITING_CAREHOME_SPECIALIZATION_PROPOSAL);
                 response = new UniversalResponse(
                         "🏥 Введите **специализацию** пансионата:\n\n" +
@@ -1545,7 +1548,8 @@ public class BotService {
             // ===== ПРЕДЛОЖЕНИЕ ПАНСИОНАТА (ШАГ 7: СОХРАНЕНИЕ) =====
             // ===== ПРЕДЛОЖЕНИЕ ПАНСИОНАТА (ШАГ 7: ОФЕРТА) =====
             case AWAITING_CAREHOME_SPECIALIZATION_PROPOSAL -> {
-                stateService.setTempCareHomeSpecialization(userId, text);
+              //  stateService.setTempCareHomeSpecialization(userId, text);
+                stateService.setTempCareHomeSpecialization(userId, truncateText(text, 100));
 
                 // ===== ПЕРЕХОДИМ К ОФЕРТЕ =====
                 stateService.setState(userId, DialogState.AWAITING_OFFER_ACCEPT);
@@ -1570,6 +1574,7 @@ public class BotService {
             }
 
             // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 1: НАЗВАНИЕ) =====
+            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 1: НАЗВАНИЕ) =====
             case ADMIN_EDIT_CAREHOME_NAME -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1582,7 +1587,8 @@ public class BotService {
                 }
 
                 if (!text.equals("-")) {
-                    editCareHome.setName(text);
+                    // Ограничение: 100 символов
+                    editCareHome.setName(truncateText(text, 100));
                     stateService.setEditingCareHome(userId, editCareHome);
                 }
 
@@ -1596,7 +1602,7 @@ public class BotService {
                 return response;
             }
 
-            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 2: АДРЕС) =====
+// ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 2: АДРЕС) =====
             case ADMIN_EDIT_CAREHOME_ADDRESS -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1609,7 +1615,8 @@ public class BotService {
                 }
 
                 if (!text.equals("-")) {
-                    editCareHome.setAddress(text);
+                    // Ограничение: 255 символов
+                    editCareHome.setAddress(truncateText(text, 255));
                     stateService.setEditingCareHome(userId, editCareHome);
                 }
 
@@ -1623,7 +1630,7 @@ public class BotService {
                 return response;
             }
 
-            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 3: ТЕЛЕФОН) =====
+// ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 3: ТЕЛЕФОН) =====
             case ADMIN_EDIT_CAREHOME_PHONE -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1637,6 +1644,7 @@ public class BotService {
 
                 if (!text.equals("-")) {
                     cleanPhone = text.replaceAll("[^0-9+]", "");
+                    // Ограничение: длина телефона 10-15 символов
                     if (!cleanPhone.matches("^[+]?[0-9]{10,15}$")) {
                         response = new UniversalResponse(
                                 "❌ Неверный формат. Введите номер в формате +7 999 123-45-67:"
@@ -1660,7 +1668,7 @@ public class BotService {
                 return response;
             }
 
-            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 4: САЙТ) =====
+// ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 4: САЙТ) =====
             case ADMIN_EDIT_CAREHOME_WEBSITE -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1673,7 +1681,8 @@ public class BotService {
                 }
 
                 if (!text.equals("-")) {
-                    editCareHome.setWebsite(text);
+                    // Ограничение: 100 символов
+                    editCareHome.setWebsite(truncateText(text, 100));
                     stateService.setEditingCareHome(userId, editCareHome);
                 }
 
@@ -1687,7 +1696,7 @@ public class BotService {
                 return response;
             }
 
-            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 5: ЦЕНА) =====
+// ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 5: ЦЕНА) =====
             case ADMIN_EDIT_CAREHOME_PRICE -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1701,9 +1710,10 @@ public class BotService {
 
                 try {
                     double priceValue = Double.parseDouble(text);
-                    if (priceValue <= 0) {
+                    // Ограничение: цена от 0 до 10 000 000
+                    if (priceValue <= 0 || priceValue > 10_000_000) {
                         response = new UniversalResponse(
-                                "❌ Цена должна быть положительным числом:"
+                                "❌ Введите сумму от 1 до 10 000 000 руб.:"
                         );
                         response.addButton("⏭️ Оставить без изменений", "skip_edit_carehome");
                         response.addButton("❌ Отменить", "cancel_action");
@@ -1712,7 +1722,7 @@ public class BotService {
                     editCareHome.setPriceFrom(priceValue);
                     stateService.setEditingCareHome(userId, editCareHome);
                 } catch (NumberFormatException e) {
-                    response = new UniversalResponse("❌ Введите число:");
+                    response = new UniversalResponse("❌ Введите число (например, 50000):");
                     response.addButton("⏭️ Оставить без изменений", "skip_edit_carehome");
                     response.addButton("❌ Отменить", "cancel_action");
                     return response;
@@ -1728,7 +1738,7 @@ public class BotService {
                 return response;
             }
 
-            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 6: ОПИСАНИЕ) =====
+// ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 6: ОПИСАНИЕ) =====
             case ADMIN_EDIT_CAREHOME_DESCRIPTION -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1741,7 +1751,8 @@ public class BotService {
                 }
 
                 if (!text.equals("-")) {
-                    editCareHome.setDescription(text);
+                    // Ограничение: 500 символов
+                    editCareHome.setDescription(truncateText(text, 500));
                     stateService.setEditingCareHome(userId, editCareHome);
                 }
 
@@ -1755,7 +1766,7 @@ public class BotService {
                 return response;
             }
 
-            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 7: СПЕЦИАЛИЗАЦИЯ) =====
+// ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 7: СПЕЦИАЛИЗАЦИЯ) =====
             case ADMIN_EDIT_CAREHOME_SPECIALIZATION -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1768,7 +1779,8 @@ public class BotService {
                 }
 
                 if (!text.equals("-")) {
-                    editCareHome.setSpecialization(text);
+                    // Ограничение: 100 символов
+                    editCareHome.setSpecialization(truncateText(text, 100));
                     stateService.setEditingCareHome(userId, editCareHome);
                 }
 
@@ -1786,7 +1798,7 @@ public class BotService {
                 return response;
             }
 
-            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 8: ШИРОТА) =====
+// ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 8: ШИРОТА) =====
             case ADMIN_EDIT_CAREHOME_LATITUDE -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1800,6 +1812,15 @@ public class BotService {
 
                 try {
                     double lat = Double.parseDouble(text);
+                    // Ограничение: широта от -90 до 90
+                    if (lat < -90 || lat > 90) {
+                        response = new UniversalResponse(
+                                "❌ Широта должна быть в диапазоне от -90 до 90:"
+                        );
+                        response.addButton("⏭️ Оставить без изменений", "skip_edit_carehome");
+                        response.addButton("❌ Отменить", "cancel_action");
+                        return response;
+                    }
                     editCareHome.setLatitude(lat);
                     stateService.setEditingCareHome(userId, editCareHome);
 
@@ -1825,7 +1846,7 @@ public class BotService {
                 }
             }
 
-            // ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 9: ДОЛГОТА + СОХРАНЕНИЕ) =====
+// ===== АДМИН: РЕДАКТИРОВАНИЕ ПАНСИОНАТА (ШАГ 9: ДОЛГОТА + СОХРАНЕНИЕ) =====
             case ADMIN_EDIT_CAREHOME_LONGITUDE -> {
                 editCareHome = stateService.getEditingCareHome(userId);
                 if (editCareHome == null) {
@@ -1839,6 +1860,15 @@ public class BotService {
 
                 try {
                     double lon = Double.parseDouble(text);
+                    // Ограничение: долгота от -180 до 180
+                    if (lon < -180 || lon > 180) {
+                        response = new UniversalResponse(
+                                "❌ Долгота должна быть в диапазоне от -180 до 180:"
+                        );
+                        response.addButton("⏭️ Оставить без изменений", "skip_edit_carehome");
+                        response.addButton("❌ Отменить", "cancel_action");
+                        return response;
+                    }
                     editCareHome.setLongitude(lon);
                     stateService.setEditingCareHome(userId, editCareHome);
 
@@ -3449,5 +3479,13 @@ public class BotService {
                 log.error("❌ Ошибка отправки администратору: {}", e.getMessage(), e);
             }
         }
+    }
+    /**
+     * Обрезает текст до указанной длины
+     */
+    private String truncateText(String text, int maxLength) {
+        if (text == null) return null;
+        if (text.length() <= maxLength) return text;
+        return text.substring(0, maxLength);
     }
 }
