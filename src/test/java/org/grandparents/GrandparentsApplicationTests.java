@@ -1,4 +1,4 @@
-package org.example.grandparents;
+package org.grandparents;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,5 +9,4 @@ class GrandparentsApplicationTests {
     @Test
     void contextLoads() {
     }
-
 }

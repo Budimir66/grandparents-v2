@@ -1,0 +1,13 @@
+meta:
+  version: 1.0
+  toolchain:
+    name: java
+    version: 21
+
+project:
+  name: pansal-ansbot
+  language: java
+  build_command: mvn clean package
+  run:
+    jarName: grandparents-1.0.0-SNAPSHOT.jar
+    containerPort: 80

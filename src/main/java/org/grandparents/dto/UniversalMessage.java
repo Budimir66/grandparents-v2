@@ -5,7 +5,9 @@ public class UniversalMessage {
     private String userId;
     private String chatId;
     private String text;
+    private String callbackData;  // ← ДОБАВИТЬ
 
+    // ===== КОНСТРУКТОРЫ =====
     public UniversalMessage() {}
 
     public UniversalMessage(String platform, String userId, String chatId, String text) {
@@ -15,7 +17,7 @@ public class UniversalMessage {
         this.text = text;
     }
 
-    // Геттеры и сеттеры
+    // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
     public String getPlatform() { return platform; }
     public void setPlatform(String platform) { this.platform = platform; }
 
@@ -28,6 +30,9 @@ public class UniversalMessage {
     public String getText() { return text; }
     public void setText(String text) { this.text = text; }
 
+    public String getCallbackData() { return callbackData; }  // ← ДОБАВИТЬ
+    public void setCallbackData(String callbackData) { this.callbackData = callbackData; }  // ← ДОБАВИТЬ
+
     @Override
     public String toString() {
         return "UniversalMessage{" +
@@ -35,6 +40,7 @@ public class UniversalMessage {
                 ", userId='" + userId + '\'' +
                 ", chatId='" + chatId + '\'' +
                 ", text='" + text + '\'' +
+                ", callbackData='" + callbackData + '\'' +
                 '}';
     }
 }
