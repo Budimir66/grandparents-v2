@@ -1907,23 +1907,23 @@ public class BotService {
 
             // ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 1: НАЗВАНИЕ) =====
             case ADMIN_ADD_CAREHOME_NAME -> {
-                stateService.setTempCareHomeName(userId, text);
+                stateService.setTempCareHomeName(userId, truncateText(text, 100));
                 stateService.setState(userId, DialogState.ADMIN_ADD_CAREHOME_ADDRESS);
                 response = new UniversalResponse("📍 Введите **адрес** пансионата:");
                 response.addButton("❌ Отменить", "cancel_action");
                 return response;
             }
 
-            // ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 2: АДРЕС) =====
+// ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 2: АДРЕС) =====
             case ADMIN_ADD_CAREHOME_ADDRESS -> {
-                stateService.setTempCareHomeAddress(userId, text);
+                stateService.setTempCareHomeAddress(userId, truncateText(text, 255));
                 stateService.setState(userId, DialogState.ADMIN_ADD_CAREHOME_PHONE);
                 response = new UniversalResponse("📞 Введите **телефон** пансионата:");
                 response.addButton("❌ Отменить", "cancel_action");
                 return response;
             }
 
-            // ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 3: ТЕЛЕФОН) =====
+// ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 3: ТЕЛЕФОН) =====
             case ADMIN_ADD_CAREHOME_PHONE -> {
                 cleanPhone = text.replaceAll("[^0-9+]", "");
                 if (!cleanPhone.matches("^[+]?[0-9]{10,15}$")) {
@@ -1940,13 +1940,14 @@ public class BotService {
                 return response;
             }
 
-            // ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 4: ЦЕНА) =====
+// ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 4: ЦЕНА) =====
             case ADMIN_ADD_CAREHOME_PRICE -> {
                 try {
                     double priceValue = Double.parseDouble(text);
-                    if (priceValue <= 0) {
+                    // Ограничение: цена от 1000 до 10 000 000
+                    if (priceValue < 1000 || priceValue > 10_000_000) {
                         response = new UniversalResponse(
-                                "❌ Цена должна быть положительным числом:"
+                                "❌ Введите сумму от 1000 до 10 000 000 руб.:"
                         );
                         response.addButtonFullRow("❌ Отменить", "cancel_action");
                         return response;
@@ -1961,32 +1962,34 @@ public class BotService {
                     response.addButtonFullRow("❌ Отменить", "cancel_action");
                     return response;
                 } catch (NumberFormatException e) {
-                    response = new UniversalResponse("❌ Введите число:");
+                    response = new UniversalResponse("❌ Введите число (например, 50000):");
                     response.addButtonFullRow("❌ Отменить", "cancel_action");
                     return response;
                 }
             }
 
-            // ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 5: САЙТ) =====
+// ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 5: САЙТ) =====
             case ADMIN_ADD_CAREHOME_WEBSITE -> {
-                stateService.setTempCareHomeWebsite(userId, text);
+                stateService.setTempCareHomeWebsite(userId, truncateText(text, 100));
                 stateService.setState(userId, DialogState.ADMIN_ADD_CAREHOME_DESCRIPTION);
                 response = new UniversalResponse("📝 Введите **описание** пансионата:");
                 response.addButtonFullRow("❌ Отменить", "cancel_action");
                 return response;
             }
 
-            // ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 6: ОПИСАНИЕ) =====
+// ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 6: ОПИСАНИЕ) =====
             case ADMIN_ADD_CAREHOME_DESCRIPTION -> {
-                stateService.setTempCareHomeDescription(userId, text);
+                stateService.setTempCareHomeDescription(userId, truncateText(text, 500));
                 stateService.setState(userId, DialogState.ADMIN_ADD_CAREHOME_SPECIALIZATION);
                 response = new UniversalResponse("🏥 Введите **специализацию** пансионата:");
                 response.addButton("❌ Отменить", "cancel_action");
                 return response;
             }
 
-            // ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 7: СОХРАНЕНИЕ) =====
+// ===== АДМИН: ДОБАВЛЕНИЕ ПАНСИОНАТА (ШАГ 7: СПЕЦИАЛИЗАЦИЯ + СОХРАНЕНИЕ) =====
             case ADMIN_ADD_CAREHOME_SPECIALIZATION -> {
+                stateService.setTempCareHomeSpecialization(userId, truncateText(text, 100));
+
                 String name = stateService.getTempCareHomeName(userId);
                 String address = stateService.getTempCareHomeAddress(userId);
                 String phone = stateService.getTempCareHomePhone(userId);
@@ -1995,14 +1998,17 @@ public class BotService {
                 String specialization = stateService.getTempCareHomeSpecialization(userId);
                 String website = stateService.getTempCareHomeWebsite(userId);
 
-                careHome = new CareHome();
-                careHome.setName(name);
-                careHome.setAddress(address);
+                // ===== СОЗДАЁМ ПАНСИОНАТ =====
+               careHome = new CareHome();
+                careHome.setName(truncateText(name, 100));
+                careHome.setAddress(truncateText(address, 255));
                 careHome.setPhone(phone);
                 careHome.setPriceFrom(priceValue);
-                careHome.setDescription(description);
-                careHome.setSpecialization(specialization);
-                careHome.setWebsite(website);
+                careHome.setDescription(truncateText(description, 500));
+                careHome.setSpecialization(truncateText(specialization, 100));
+                careHome.setWebsite(truncateText(website, 100));
+
+
                 careHome.setStatus("APPROVED");
                 careHome.setActive(true);
                 careHome.setSubscribed(true);
