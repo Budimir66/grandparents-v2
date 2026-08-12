@@ -142,6 +142,14 @@ public class CareHome {
 
     // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
 
+    public void setPendingChanges(String pendingChanges) {
+        if (pendingChanges != null && pendingChanges.length() > 255) {
+            this.pendingChanges = pendingChanges.substring(0, 255);
+        } else {
+            this.pendingChanges = pendingChanges;
+        }
+    }
+
     public Double getMonthlyRevenue() { return monthlyRevenue; }
     public void setMonthlyRevenue(Double monthlyRevenue) { this.monthlyRevenue = monthlyRevenue; }
 

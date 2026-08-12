@@ -90,7 +90,8 @@ public class ElderFormService {
                 // Ограничение: 100 символов
                 tempElder.setFullName(truncateText(text, 100));
                 stateService.setState(userId, DialogState.AWAITING_CLIENT_NAME);
-                response.setText("👤 Как к вам обращаться? (например: Иван Петрович):");
+                response.setText("👤 Как к вам обращаться? (до 100 символов):\n" +
+                        "Например: Иван Петрович");
                 response.addButton("❌ Отменить", "cancel_action");
             }
 
@@ -113,7 +114,8 @@ public class ElderFormService {
                     }
                     tempElder.setAge(age);
                     stateService.setState(userId, DialogState.AWAITING_ELDER_HEALTH);
-                    response.setText("📝 Введите состояние здоровья (например: диабет, деменция, нужен уход):");
+                    response.setText("📝 Введите состояние здоровья (до 255 символов):\n" +
+                            "Например: диабет, деменция, нужен постоянный уход");
                     response.addButton("❌ Отменить", "cancel_action");
                 } catch (NumberFormatException e) {
                     response.setText("❌ Пожалуйста, введите число (например, 75):");
@@ -140,7 +142,8 @@ public class ElderFormService {
                     }
                     tempElder.setBudget(budget);
                     stateService.setState(userId, DialogState.AWAITING_ELDER_LOCATION);
-                    response.setText("📝 Введите желаемую локацию (город, район):");
+                    response.setText("📍 Введите желаемую локацию (до 100 символов):\n" +
+                            "Например: Москва, Северное Измайлово");
                     response.addButton("❌ Отменить", "cancel_action");
                 } catch (NumberFormatException e) {
                     response.setText("❌ Пожалуйста, введите число (например, 50000):");
@@ -169,7 +172,8 @@ public class ElderFormService {
                 }
                 tempElder.setClientPhone(cleanPhone);
                 stateService.setState(userId, DialogState.AWAITING_ELDER_REQUIREMENTS);
-                response.setText("📝 Введите особые пожелания (например: первый этаж, диетическое питание):");
+                response.setText("📝 Введите особые пожелания (до 255 символов):\n" +
+                        "Например: первый этаж, диетическое питание, отдельная палата");
                 response.addButton("❌ Отменить", "cancel_action");
             }
 

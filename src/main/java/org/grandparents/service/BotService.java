@@ -1456,8 +1456,9 @@ public class BotService {
                 stateService.setTempCareHomeName(userId, truncateText(text, 100));
              //   stateService.setTempCareHomeName(userId, text);
                 stateService.setState(userId, DialogState.AWAITING_CAREHOME_ADDRESS_PROPOSAL);
-               response = new UniversalResponse(
-                        "📍 Введите **адрес** пансионата (город, улица, дом):"
+                response = new UniversalResponse(
+                        "📍 Введите **адрес** пансионата (до 255 символов):\n" +
+                                "Например: Московская область, г. Королёв, ул. Центральная 15"
                 );
                 response.addButton("❌ Отменить", "cancel_action");
                 return response;
@@ -1508,8 +1509,8 @@ public class BotService {
                     stateService.setTempCareHomePrice(userId, priceValue);
                     stateService.setState(userId, DialogState.AWAITING_CAREHOME_WEBSITE_PROPOSAL);
                     response = new UniversalResponse(
-                            "🌐 Введите **адрес сайта** пансионата:\n\n" +
-                                    "Например: https://голубые-ели.рф\n\n" +
+                            "🌐 Введите **адрес сайта** пансионата (до 100 символов):\n" +
+                                    "Например: https://пансальянс.рф\n\n" +
                                     "Если сайта нет, напишите '-'"
                     );
                     response.addButtonFullRow("❌ Отменить", "cancel_action");
@@ -1526,7 +1527,8 @@ public class BotService {
                 stateService.setTempCareHomeWebsite(userId, text);
                 stateService.setState(userId, DialogState.AWAITING_CAREHOME_DESCRIPTION_PROPOSAL);
                 response = new UniversalResponse(
-                        "📝 Введите **описание** пансионата (условия, особенности):"
+                        "📝 Введите **описание** пансионата (до 500 символов):\n" +
+                                "Например: Современный пансионат с круглосуточным уходом и медицинским персоналом"
                 );
                 response.addButtonFullRow("❌ Отменить", "cancel_action");
                 return response;
@@ -1538,7 +1540,7 @@ public class BotService {
               //  stateService.setTempCareHomeDescription(userId, text);
                 stateService.setState(userId, DialogState.AWAITING_CAREHOME_SPECIALIZATION_PROPOSAL);
                 response = new UniversalResponse(
-                        "🏥 Введите **специализацию** пансионата:\n\n" +
+                        "🏥 Введите **специализацию** пансионата (до 100 символов):\n" +
                                 "Например: деменция, диабет, общий уход, паллиатив"
                 );
                 response.addButtonFullRow("❌ Отменить", "cancel_action");
@@ -1909,7 +1911,9 @@ public class BotService {
             case ADMIN_ADD_CAREHOME_NAME -> {
                 stateService.setTempCareHomeName(userId, truncateText(text, 100));
                 stateService.setState(userId, DialogState.ADMIN_ADD_CAREHOME_ADDRESS);
-                response = new UniversalResponse("📍 Введите **адрес** пансионата:");
+                response = new UniversalResponse(
+                        "📍 Введите **адрес** пансионата (до 255 символов):"
+                );
                 response.addButton("❌ Отменить", "cancel_action");
                 return response;
             }
@@ -1972,7 +1976,9 @@ public class BotService {
             case ADMIN_ADD_CAREHOME_WEBSITE -> {
                 stateService.setTempCareHomeWebsite(userId, truncateText(text, 100));
                 stateService.setState(userId, DialogState.ADMIN_ADD_CAREHOME_DESCRIPTION);
-                response = new UniversalResponse("📝 Введите **описание** пансионата:");
+                response = new UniversalResponse(
+                        "📝 Введите **описание** пансионата (до 255 символов):"
+                );
                 response.addButtonFullRow("❌ Отменить", "cancel_action");
                 return response;
             }
