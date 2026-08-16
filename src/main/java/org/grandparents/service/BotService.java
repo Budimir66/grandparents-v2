@@ -362,77 +362,41 @@ public class BotService {
         if (callbackData.equals("help")) {
             return showHelp(userId);
         }
-
-        // ===== ПРИНЯТИЕ СОГЛАСИЯ =====
-        if (callbackData.equals("accept_consent")) {
-            // Проверяем, что пользователь в процессе создания заявки
+// ===== ПРИНЯТИЕ ОФЕРТЫ ПЕРЕД АНКЕТОЙ =====
+        if (callbackData.equals("accept_consent_before_form")) {
             DialogState currentState = stateService.getState(userId);
-            if (currentState != DialogState.AWAITING_CONSENT) {
+            if (currentState != DialogState.AWAITING_CONSENT_BEFORE_FORM) {
                 return responseWithMainMenu("❌ Нет активной заявки для подтверждения.");
             }
 
-            // Получаем временную заявку
             Elder tempElder = stateService.getTempElder(userId);
-            if (tempElder == null) {
-                return responseWithMainMenu("❌ Ошибка: заявка не найдена.");
+            if (tempElder != null) {
+                tempElder.setConsentGiven(true);
+                tempElder.setConsentGivenAt(LocalDateTime.now());
+                tempElder.setConsentCalls(true);
+                tempElder.setConsentMessages(true);
+                tempElder.setConsentNewsletter(true);
+                stateService.setTempElder(userId, tempElder);
             }
 
-            // ===== СОХРАНЯЕМ ЗАЯВКУ =====
-            tempElder.setConsentGiven(true);
-            tempElder.setConsentGivenAt(LocalDateTime.now());
-
-            user = getUserOrNull(userId);
-            if (user != null && user.getAccessLevel() == AccessLevel.GUEST) {
-                tempElder.setStatus(ElderStatus.PENDING);
-            } else if (user != null && user.getAccessLevel() == AccessLevel.OPERATOR) {
-                tempElder.setCreatedBy(userId);
-                tempElder.setCareHomeId(user.getCareHomeId());
-                tempElder.setStatus(ElderStatus.OFFERED);
-            } else {
-                tempElder.setStatus(ElderStatus.NEW);
-            }
-
-            elderService.createElder(tempElder);
-            stateService.clearState(userId);
-
-            // ===== УВЕДОМЛЯЕМ АДМИНИСТРАТОРА =====
-            if (user != null && user.getAccessLevel() == AccessLevel.GUEST) {
-                notifyAdminsAboutNewElder(tempElder);
-                UniversalResponse response = new UniversalResponse(
-                        "✅ **Заявка отправлена на модерацию!**\n\n" +
-                                "📋 **Номер заявки:** #" + tempElder.getId() + "\n" +
-                                "👤 **Подопечный:** " + tempElder.getFullName() + "\n" +
-                                "⏳ **Статус:** На модерации\n\n" +
-                                "📋 **Согласие на обработку данных принято** ✅\n\n" +
-                                "Администратор рассмотрит заявку в ближайшее время.\n" +
-                                "Вы получите уведомление о решении."
-                );
-                response.addButtonFullRow("👤 Моя заявка", "my_request");
-                response.addButtonFullRow("🏠 Главное меню", "main_menu");
-                return response;
-            }
-
-            // Для оператора
+            stateService.setState(userId, DialogState.AWAITING_ELDER_NAME);
             UniversalResponse response = new UniversalResponse(
-                    "✅ **Заявка создана!**\n\n" +
-                            "📋 **Номер заявки:** #" + tempElder.getId() + "\n" +
-                            "👤 **Подопечный:** " + tempElder.getFullName() + "\n" +
-                            "💰 **Бюджет:** " + tempElder.getBudget() + " руб.\n" +
-                            "📍 **Локация:** " + tempElder.getPreferredLocation() + "\n" +
-                            "📋 **Согласие на обработку данных принято** ✅"
+                    "📝 Начинаем создание заявки!\n\n" +
+                            "✅ Согласие на обработку данных получено.\n\n" +
+                            "Введите полное имя подопечного (например: Иванова Анна Петровна):"
             );
-            response.addButtonFullRow("📋 Мои заявки", "my_requests");
-            response.addButtonFullRow("🏠 Главное меню", "main_menu");
+            response.addButton("❌ Отменить", "cancel_action");
             return response;
         }
 
-// ===== ОТКАЗ ОТ СОГЛАСИЯ =====
-        if (callbackData.equals("decline_consent")) {
+// ===== ОТКАЗ ОТ ОФЕРТЫ =====
+        if (callbackData.equals("decline_consent_before_form")) {
             stateService.clearState(userId);
             return responseWithMainMenu("❌ Вы отклонили согласие на обработку данных.\n\n" +
                     "Заявка не будет создана.\n\n" +
-                    "Если передумаете, начните создание заявки заново.");
+                    "Если передумаете, нажмите 'Создать заявку' заново.");
         }
+
 
         // ===== АДМИН: ПРОСМОТР ОПЕРАТОРА =====
         if (callbackData.startsWith("admin_view_operator_")) {

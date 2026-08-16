@@ -134,6 +134,8 @@ public enum DialogState {
     EDITING_PROFILE_TELEGRAM,
     EDITING_PROFILE_EMAIL,
     AWAITING_CONSENT,  // Ожидание согласия на обработку данных
+    // В DialogState.java должно быть:
+    AWAITING_CONSENT_BEFORE_FORM,  // ✅ ДОЛЖНО БЫТЬ
 
 
 }

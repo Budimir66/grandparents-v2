@@ -108,6 +108,16 @@ public class Elder {
     @Column(name = "consent_given_at")
     private LocalDateTime consentGivenAt;
 
+    // ===== СОГЛАСИЕ НА ПОЛУЧЕНИЕ СООБЩЕНИЙ =====
+    @Column(name = "consent_calls")
+    private Boolean consentCalls = false;
+
+    @Column(name = "consent_messages")
+    private Boolean consentMessages = false;
+
+    @Column(name = "consent_newsletter")
+    private Boolean consentNewsletter = false;
+
     // ===== КОНСТРУКТОРЫ =====
     public Elder() {
     }
@@ -130,6 +140,16 @@ public class Elder {
     }
 
     // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
+
+    public Boolean getConsentCalls() { return consentCalls; }
+    public void setConsentCalls(Boolean consentCalls) { this.consentCalls = consentCalls; }
+
+    public Boolean getConsentMessages() { return consentMessages; }
+    public void setConsentMessages(Boolean consentMessages) { this.consentMessages = consentMessages; }
+
+    public Boolean getConsentNewsletter() { return consentNewsletter; }
+    public void setConsentNewsletter(Boolean consentNewsletter) { this.consentNewsletter = consentNewsletter; }
+
 
     public Boolean getConsentGiven() { return consentGiven; }
     public void setConsentGiven(Boolean consentGiven) { this.consentGiven = consentGiven; }
