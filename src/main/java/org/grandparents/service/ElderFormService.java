@@ -62,12 +62,36 @@ public class ElderFormService {
             }
         }
 
-        stateService.setState(userId, DialogState.AWAITING_ELDER_NAME);
-        UniversalResponse response = new UniversalResponse(
-                "📝 Начинаем создание заявки!\n\n" +
-                        "Введите полное имя подопечного (например: Иванова Анна Петровна):"
-        );
-        response.addButton("❌ Отменить", "cancel_action");
+        // ===== СОЗДАЁМ ВРЕМЕННУЮ ЗАЯВКУ =====
+        Elder tempElder = new Elder();
+        tempElder.setClientTelegramId(userId);
+        tempElder.setConsentGiven(false);
+        stateService.setTempElder(userId, tempElder);
+
+        // ===== ПОКАЗЫВАЕМ ОФЕРТУ В САМОМ НАЧАЛЕ =====
+        stateService.setState(userId, DialogState.AWAITING_CONSENT_BEFORE_FORM);
+
+        String consentText = """
+            📋 **СОГЛАСИЕ НА ОБРАБОТКУ ПЕРСОНАЛЬНЫХ ДАННЫХ**
+
+            Для создания заявки необходимо ваше согласие на обработку персональных данных
+            и получение сообщений от операторов пансионатов.
+
+            1. Я даю своё согласие на обработку моих персональных данных
+            и данных моего подопечного.
+
+            2. Я соглашаюсь, что мои контактные данные и информация о моём подопечном
+            будут переданы операторам пансионатов для поиска подходящего места проживания.
+
+            3. Я даю своё согласие на получение сообщений от операторов пансионатов.
+
+            Нажимая "✅ Согласен", я принимаю условия.
+
+            ❌ Не согласен — заявка не будет создана.""";
+
+        UniversalResponse response = new UniversalResponse(consentText);
+        response.addButtonFullRow("✅ Согласен", "accept_consent_before_form");
+        response.addButtonFullRow("❌ Не согласен", "decline_consent_before_form");
         return response;
     }
 
@@ -178,36 +202,54 @@ public class ElderFormService {
             }
 
             case AWAITING_ELDER_REQUIREMENTS -> {
-                // Ограничение: 255 символов
                 tempElder.setRequirements(truncateText(text, 255));
-                tempElder.setRequirements(text);
                 tempElder.setClientTelegramId(userId);
                 tempElder.setExpiresAt(LocalDateTime.now().plusDays(14));
 
-                // ===== ПЕРЕХОДИМ К СОГЛАСИЮ =====
-                stateService.setState(userId, DialogState.AWAITING_CONSENT);
+                // ===== ПРОВЕРЯЕМ, ЧТО СОГЛАСИЕ БЫЛО ДАНО =====
+                if (tempElder.getConsentGiven() == null || !tempElder.getConsentGiven()) {
+                    response.setText("❌ Согласие на обработку данных не было получено.\n\n" +
+                            "Пожалуйста, начните создание заявки заново.");
+                    response.addButton("📝 Создать заявку", "new_request");
+                    response.addButton("🏠 Главное меню", "main_menu");
+                    stateService.clearState(userId);
+                    return response;
+                }
 
-                String consentText = """
-            📋 **Согласие на обработку персональных данных**
+                // ===== ОПРЕДЕЛЯЕМ СТАТУС =====
+                User user = getUserOrNull(userId);
+                if (user != null && isGuest(user)) {
+                    tempElder.setStatus(ElderStatus.PENDING);
+                } else if (user != null && isOperator(user)) {
+                    tempElder.setCreatedBy(userId);
+                    tempElder.setCareHomeId(user.getCareHomeId());
+                    tempElder.setStatus(ElderStatus.OFFERED);
+                } else {
+                    tempElder.setStatus(ElderStatus.NEW);
+                }
 
-            Я, заполняя данную заявку, даю своё согласие на обработку моих персональных данных
-            и данных моего подопечного в соответствии с Федеральным законом № 152-ФЗ
-            «О персональных данных».
+                // ===== СОХРАНЯЕМ ЗАЯВКУ =====
+                elderService.createElder(tempElder);
+                stateService.clearState(userId);
 
-            Я соглашаюсь, что мои контактные данные (имя, телефон) и информация о моём подопечном
-            (имя, возраст, состояние здоровья, бюджет, локация, пожелания) будут переданы
-            операторам пансионатов для поиска подходящего места проживания.
-
-            Я понимаю, что могу отозвать своё согласие в любое время, написав в поддержку.
-
-            Нажимая "✅ Согласен", я принимаю условия.
-
-            ❌ Не согласен — заявка не будет отправлена.""";
-
-                response = new UniversalResponse(consentText);
-                response.addButtonFullRow("✅ Согласен", "accept_consent");
-                response.addButtonFullRow("❌ Не согласен", "decline_consent");
-                return response;
+                // ===== ОТВЕТ =====
+                if (user != null && isGuest(user)) {
+                    notifyAdminsAboutNewElder(tempElder);
+                    response.setText("✅ **Заявка отправлена на модерацию!**\n\n" +
+                            "📋 **Номер заявки:** #" + tempElder.getId() + "\n" +
+                            "👤 **Подопечный:** " + tempElder.getFullName() + "\n" +
+                            "⏳ **Статус:** На модерации");
+                    response.addButton("👤 Моя заявка", "my_request");
+                    response.addButton("🏠 Главное меню", "main_menu");
+                } else {
+                    response.setText("✅ **Заявка создана!**\n\n" +
+                            "📋 **Номер заявки:** #" + tempElder.getId() + "\n" +
+                            "👤 **Подопечный:** " + tempElder.getFullName() + "\n" +
+                            "💰 **Бюджет:** " + tempElder.getBudget() + " руб.\n" +
+                            "📍 **Локация:** " + tempElder.getPreferredLocation());
+                    response.addButton("📋 Мои заявки", "my_requests");
+                    response.addButton("🏠 Главное меню", "main_menu");
+                }
             }
             // ===== РЕДАКТИРОВАНИЕ ЗАЯВКИ =====
             // ===== РЕДАКТИРОВАНИЕ ЗАЯВКИ =====
@@ -306,6 +348,10 @@ public class ElderFormService {
         }
 
         return response;
+    }
+
+    private boolean isOperator(User user) {
+        return user != null && user.getAccessLevel() == AccessLevel.OPERATOR;
     }
 
     /**

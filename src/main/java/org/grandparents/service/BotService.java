@@ -362,7 +362,37 @@ public class BotService {
         if (callbackData.equals("help")) {
             return showHelp(userId);
         }
+// ===== ПРИНЯТИЕ ОФЕРТЫ ПЕРЕД АНКЕТОЙ =====
+        if (callbackData.equals("accept_consent_before_form")) {
+            DialogState currentState = stateService.getState(userId);
+            if (currentState != DialogState.AWAITING_CONSENT_BEFORE_FORM) {
+                return responseWithMainMenu("❌ Нет активной заявки для подтверждения.");
+            }
 
+            Elder tempElder = stateService.getTempElder(userId);
+            if (tempElder != null) {
+                tempElder.setConsentGiven(true);
+                tempElder.setConsentGivenAt(LocalDateTime.now());
+                stateService.setTempElder(userId, tempElder);
+            }
+
+            stateService.setState(userId, DialogState.AWAITING_ELDER_NAME);
+            UniversalResponse response = new UniversalResponse(
+                    "📝 Начинаем создание заявки!\n\n" +
+                            "✅ Согласие на обработку данных получено.\n\n" +
+                            "Введите полное имя подопечного (например: Иванова Анна Петровна):"
+            );
+            response.addButton("❌ Отменить", "cancel_action");
+            return response;
+        }
+
+// ===== ОТКАЗ ОТ ОФЕРТЫ =====
+        if (callbackData.equals("decline_consent_before_form")) {
+            stateService.clearState(userId);
+            return responseWithMainMenu("❌ Вы отклонили согласие на обработку данных.\n\n" +
+                    "Заявка не будет создана.\n\n" +
+                    "Если передумаете, нажмите 'Создать заявку' заново.");
+        }
         // ===== ПРИНЯТИЕ СОГЛАСИЯ =====
         if (callbackData.equals("accept_consent")) {
             // Проверяем, что пользователь в процессе создания заявки

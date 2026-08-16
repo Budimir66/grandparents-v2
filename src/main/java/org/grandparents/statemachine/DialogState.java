@@ -134,7 +134,7 @@ public enum DialogState {
     EDITING_PROFILE_TELEGRAM,
     EDITING_PROFILE_EMAIL,
     AWAITING_CONSENT,  // Ожидание согласия на обработку данных
-
+    AWAITING_CONSENT_BEFORE_FORM,  // Согласие перед заполнением анкеты
 
 }
 
