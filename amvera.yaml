@@ -1,13 +1,15 @@
 meta:
-  version: 1.0
+  environment: jvm
   toolchain:
-    name: java
-    version: 21
-
-project:
-  name: pansal-ansbot
-  language: java
-  build_command: mvn clean package
-  run:
-    jarName: grandparents-1.0.0-SNAPSHOT.jar
-    containerPort: 80
+    name: maven
+    version: "21"
+build:
+  image: null
+  args: clean package
+  artifacts:
+    "": ""
+run:
+  persistenceMount: /data
+  image: null
+  jarName: target/grandparents-1.0.0-SNAPSHOT.jar
+  containerPort: 80
