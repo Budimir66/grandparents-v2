@@ -272,7 +272,7 @@ public class BotService {
         }
 // ===== ДИРЕКТОР ПАНСИОНАТА (MANAGER) =====
         if (user.getAccessLevel() == AccessLevel.MANAGER) {
-            response.setText("🏢 **Панель директора**\n\n" +
+            response.setText("🏢 **Панель менеджера**\n\n" +
                     "Вы управляете пансионатом:\n" +
                     "📌 Вы можете регистрировать операторов\n" +
                     "📌 Управлять пансионатом\n" +
@@ -284,7 +284,6 @@ public class BotService {
             response.addButtonFullRow("📋 Заявки", "menu_requests");
             response.addButtonFullRow("📊 Статистика", "manager_stats");
             response.addButtonFullRow("❓ Помощь", "help");  // ← ТОЛЬКО ОДНА КНОПКА
-            response.addButtonFullRow("🏠 Главное меню", "main_menu");
             return response;
         }
 
