@@ -86,14 +86,11 @@ public class BotService {
         String chatId = message.getChatId();
 
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
+        // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
         if (text != null && !text.isEmpty() && !text.startsWith("/")) {
-            // Ищем активное приглашение по названию пансионата
             CareHome careHome = careHomeService.findByNameExact(text.trim());
-            if (careHome != null) {
-                Invitation invitation = invitationService.findByCareHomeId(careHome.getId());
-                if (invitation != null && invitationService.isValid(invitation)) {
-                    return handleAcceptInvitation(userId, invitation);
-                }
+            if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
+                return handleAcceptInvitation(userId, careHome.getId());
             }
         }
 
@@ -3559,8 +3556,7 @@ public class BotService {
         if (text.length() <= maxLength) return text;
         return text.substring(0, maxLength);
     }
-    private UniversalResponse handleAcceptInvitation(Long userId, Invitation invitation) {
-        // Проверяем, не является ли пользователь уже оператором
+    private UniversalResponse handleAcceptInvitation(Long userId, Long careHomeId) {
         User user = userService.findByTelegramId(userId).orElse(null);
         if (user != null && user.getAccessLevel() == AccessLevel.OPERATOR) {
             return responseWithMainMenu("✅ Вы уже являетесь оператором.");
@@ -3571,9 +3567,8 @@ public class BotService {
             user.setTelegramId(userId);
         }
 
-        // ===== ПРИСВАИВАЕМ СТАТУС "ОПЕРАТОР" =====
         user.setAccessLevel(AccessLevel.OPERATOR);
-        user.setCareHomeId(invitation.getCareHomeId());
+        user.setCareHomeId(careHomeId);
         user.setRegistered(true);
         user.setRegisteredAt(LocalDateTime.now());
         if (user.getBonusPoints() == 0) {
@@ -3581,10 +3576,9 @@ public class BotService {
         }
         userService.saveUser(user);
 
-        // Помечаем приглашение как использованное
-        invitationService.markAsUsed(invitation, userId);
+        // ❌ НЕ ПОМЕЧАЕМ ПРИГЛАШЕНИЕ КАК ИСПОЛЬЗОВАННОЕ!
+        // Потому что приглашение не привязано к конкретному оператору
 
-        // Отправляем на заполнение анкеты
         stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_NAME);
 
         UniversalResponse response = new UniversalResponse(

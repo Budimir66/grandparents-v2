@@ -47,4 +47,9 @@ public class InvitationService {
         if (invitation.getExpiresAt().isBefore(LocalDateTime.now())) return false;
         return true;
     }
+    public boolean hasActiveInvitation(Long careHomeId) {
+        return invitationRepository.existsByCareHomeIdAndUsedFalseAndExpiresAtAfter(
+                careHomeId, LocalDateTime.now()
+        );
+    }
 }
