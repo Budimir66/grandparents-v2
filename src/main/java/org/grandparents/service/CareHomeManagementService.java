@@ -123,9 +123,10 @@ public class CareHomeManagementService {
             📅 Действительно: 3 дня
 
             📤 Токен это название пансионата и четырёхзначное число вместе - всё нижнее сообщение. 
-            🔽 Перешлите оператору токен из чата ниже 🔽.
-
+            
             ❗ Для регистрации оператор должен вставить токен в чат с ботом "ПансАльянс".
+
+           🔽 Перешлите оператору токен из чата ниже 🔽.
             """.formatted(careHomeName);
 
         UniversalResponse instructionResponse = new UniversalResponse(instruction);
