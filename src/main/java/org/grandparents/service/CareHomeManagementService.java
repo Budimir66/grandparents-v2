@@ -25,19 +25,108 @@ public class CareHomeManagementService {
     private final YandexMapsService yandexMapsService;
     private final MessageSender messageSender;
     private final ElderService elderService;
+    private final InvitationService invitationService;
 
     public CareHomeManagementService(UserService userService,
                                      CareHomeService careHomeService,
                                      UserStateService stateService,
                                      YandexMapsService yandexMapsService,
                                      MessageSender messageSender,
-                                     ElderService elderService) {
+                                     ElderService elderService,
+                                     InvitationService invitationService) {
         this.userService = userService;
         this.careHomeService = careHomeService;
         this.stateService = stateService;
         this.yandexMapsService = yandexMapsService;
         this.messageSender = messageSender;
         this.elderService = elderService;
+        this.invitationService = invitationService;
+    }
+
+    /**
+     * Директор создаёт приглашение оператору
+     */
+    public UniversalResponse inviteOperator(Long userId) {
+        User director = getUserOrNull(userId);
+        if (director == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
+        if (director.getAccessLevel() != AccessLevel.MANAGER && director.getAccessLevel() != AccessLevel.ADMIN) {
+            return responseWithMainMenu("❌ Только директор может приглашать операторов.");
+        }
+
+        // Получаем все пансионаты директора
+        List<CareHome> careHomes = careHomeService.findByProposedBy(userId);
+        if (director.getCareHomeId() != null) {
+            CareHome ch = careHomeService.findById(director.getCareHomeId());
+            if (ch != null && !careHomes.contains(ch)) {
+                careHomes.add(ch);
+            }
+        }
+
+        if (careHomes.isEmpty()) {
+            return responseWithMainMenu("❌ У вас нет пансионатов для приглашения оператора.");
+        }
+
+        // Если только 1 пансионат — сразу создаём приглашение
+        if (careHomes.size() == 1) {
+            return createInvitation(userId, careHomes.get(0).getId());
+        }
+
+        // Если несколько — показываем список
+        UniversalResponse response = new UniversalResponse(
+                "🏢 **Выберите пансионат для оператора:**\n\n" +
+                        "Оператор будет видеть заявки только этого пансионата.\n\n" +
+                        "🌐 Или выберите **«Вся сеть»** — оператор будет работать со всеми вашими пансионатами."
+        );
+
+        for (CareHome ch : careHomes) {
+            response.addButtonFullRow("🏢 " + ch.getName(), "invite_carehome_" + ch.getId());
+        }
+
+        response.addButtonFullRow("🌐 Вся сеть", "invite_carehome_all");
+        response.addButtonFullRow("❌ Отменить", "cancel_action");
+        return response;
+    }
+
+    /**
+     * Создаёт приглашение и показывает кодовое слово
+     */
+    private UniversalResponse createInvitation(Long directorId, Long careHomeId) {
+        User director = getUserOrNull(directorId);
+        if (director == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
+        Invitation invitation = invitationService.createInvitation(careHomeId, director.getId());
+
+        String careHomeName = "ВСЯ СЕТЬ";
+        if (careHomeId != null && careHomeId > 0) {
+            CareHome ch = careHomeService.findById(careHomeId);
+            if (ch != null) {
+                careHomeName = ch.getName();
+            }
+        }
+
+        String message = """
+            ✅ **Приглашение создано!**
+
+            🏢 Пансионат: **%s**
+            📅 Приглашение действительно: **3 дня**
+            ⚠️ Одноразовое использование.
+
+            📤 Попросите оператора **написать боту название пансионата**:
+
+            **%s**
+
+            После этого оператор сможет стать оператором.
+            """.formatted(careHomeName, careHomeName);
+
+        UniversalResponse response = new UniversalResponse(message);
+        response.addButtonFullRow("📋 Список операторов", "manager_operators");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
     }
 
     // ============================================================
@@ -707,6 +796,7 @@ public class CareHomeManagementService {
                             "У вас пока нет пансионатов.\n\n" +
                             "📝 Сначала зарегистрируйте пансионат."
             );
+            response.addButtonFullRow("➕ Пригласить оператора", "invite_operator");
             response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
             response.addButtonFullRow("🏠 Главное меню", "main_menu");
             return response;
@@ -1050,4 +1140,5 @@ public class CareHomeManagementService {
         response.addButton("❌ Отменить", "cancel_action");
         return response;
     }
+
 }

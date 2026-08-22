@@ -135,6 +135,10 @@ public enum DialogState {
     EDITING_PROFILE_EMAIL,
     AWAITING_CONSENT,  // Ожидание согласия на обработку данных
     AWAITING_CONSENT_BEFORE_FORM,  // Согласие перед заполнением анкеты
-
+    // ===== ПРОФИЛЬ ОПЕРАТОРА =====
+    AWAITING_OPERATOR_PROFILE_NAME,
+    AWAITING_OPERATOR_PROFILE_PHONE,
+    AWAITING_OPERATOR_PROFILE_WHATSAPP,
+    AWAITING_OPERATOR_PROFILE_EMAIL,
 }
 

@@ -37,6 +37,7 @@ public class BotService {
     private final UserSettingsService userSettingsService;
     private final OperatorService operatorService;
     private final StatisticsService statisticsService;
+    private final InvitationService invitationService;
 
     public BotService(UserService userService,
                       ElderService elderService,
@@ -53,7 +54,8 @@ public class BotService {
                       AdminService adminService,
                       UserSettingsService userSettingsService,
                       OperatorService operatorService,
-                      StatisticsService statisticsService) {
+                      StatisticsService statisticsService,
+                      InvitationService invitationService) {
         this.userService = userService;
         this.elderService = elderService;
         this.careHomeService = careHomeService;
@@ -70,6 +72,7 @@ public class BotService {
         this.userSettingsService = userSettingsService;
         this.operatorService = operatorService;
         this.statisticsService = statisticsService;
+        this.invitationService = invitationService;
     }
 
     // ============================================================
@@ -81,6 +84,18 @@ public class BotService {
         String callbackData = message.getCallbackData();
         Long userId = Long.parseLong(message.getUserId());
         String chatId = message.getChatId();
+
+        // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
+        if (text != null && !text.isEmpty() && !text.startsWith("/")) {
+            // Ищем активное приглашение по названию пансионата
+            CareHome careHome = careHomeService.findByNameExact(text.trim());
+            if (careHome != null) {
+                Invitation invitation = invitationService.findByCareHomeId(careHome.getId());
+                if (invitation != null && invitationService.isValid(invitation)) {
+                    return handleAcceptInvitation(userId, invitation);
+                }
+            }
+        }
 
         // ===== СОЗДАЁМ ПОЛЬЗОВАТЕЛЯ, ЕСЛИ ЕГО НЕТ =====
         User user = userService.findByTelegramId(userId).orElse(null);
@@ -361,6 +376,18 @@ public class BotService {
         if (callbackData.equals("help")) {
             return showHelp(userId);
         }
+
+        // ===== ВЫБОР ПАНСИОНАТА ДЛЯ ПРИГЛАШЕНИЯ =====
+        if (callbackData.startsWith("invite_carehome_")) {
+            String param = callbackData.substring("invite_carehome_".length());
+            if ("all".equals(param)) {
+                return careHomeManagementService.inviteOperator(userId);
+            } else {
+                Long careHomeId = Long.parseLong(param);
+                return careHomeManagementService.inviteOperator(userId);
+            }
+        }
+
 // ===== ПРИНЯТИЕ ОФЕРТЫ ПЕРЕД АНКЕТОЙ =====
         if (callbackData.equals("accept_consent_before_form")) {
             DialogState currentState = stateService.getState(userId);
@@ -3528,5 +3555,41 @@ public class BotService {
         if (text == null) return null;
         if (text.length() <= maxLength) return text;
         return text.substring(0, maxLength);
+    }
+    private UniversalResponse handleAcceptInvitation(Long userId, Invitation invitation) {
+        // Проверяем, не является ли пользователь уже оператором
+        User user = userService.findByTelegramId(userId).orElse(null);
+        if (user != null && user.getAccessLevel() == AccessLevel.OPERATOR) {
+            return responseWithMainMenu("✅ Вы уже являетесь оператором.");
+        }
+
+        if (user == null) {
+            user = new User();
+            user.setTelegramId(userId);
+        }
+
+        // ===== ПРИСВАИВАЕМ СТАТУС "ОПЕРАТОР" =====
+        user.setAccessLevel(AccessLevel.OPERATOR);
+        user.setCareHomeId(invitation.getCareHomeId());
+        user.setRegistered(true);
+        user.setRegisteredAt(LocalDateTime.now());
+        if (user.getBonusPoints() == 0) {
+            user.setBonusPoints(10);
+        }
+        userService.saveUser(user);
+
+        // Помечаем приглашение как использованное
+        invitationService.markAsUsed(invitation, userId);
+
+        // Отправляем на заполнение анкеты
+        stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_NAME);
+
+        UniversalResponse response = new UniversalResponse(
+                "✅ Вы стали оператором! 🎉\n\n" +
+                        "Теперь заполните ваш профиль.\n\n" +
+                        "Введите ваше **имя**:"
+        );
+        response.addButton("❌ Отменить", "cancel_action");
+        return response;
     }
 }
