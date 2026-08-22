@@ -24,6 +24,7 @@ public class CareHomeManagementService {
     private final ElderService elderService;
     private final InvitationService invitationService;
 
+
     public CareHomeManagementService(UserService userService,
                                      CareHomeService careHomeService,
                                      UserStateService stateService,
@@ -99,6 +100,7 @@ public class CareHomeManagementService {
             return responseWithMainMenu("❌ Пользователь не найден.");
         }
 
+        // ===== 1. СОЗДАЁМ ПРИГЛАШЕНИЕ =====
         Invitation invitation = invitationService.createInvitation(careHomeId, director.getId());
 
         String careHomeName = "ВСЯ СЕТЬ";
@@ -109,25 +111,38 @@ public class CareHomeManagementService {
             }
         }
 
+        // ===== 2. ГЕНЕРИРУЕМ ТОКЕН =====
         int randomCode = 1000 + new Random().nextInt(9000);
         String token = careHomeName + " " + randomCode;
 
-        String message = """
+        // ===== 3. ПЕРВОЕ СООБЩЕНИЕ (ИНСТРУКЦИЯ) =====
+        String instruction = """
             ✅ Приглашение создано!
 
-            🏢 Пансионат: **%s**
+            🏢 Пансионат: %s
             📅 Действительно: 3 дня
 
-            🔑 Токен: `%s`
-            Для оператора: скопировать Токен из личного чата и вставить в чат бота "ПансАльянс"
+            📤 Отправьте оператору токен из личного чата.
 
-            📤 Отправьте этот токен оператору.
-            """.formatted(careHomeName, token);
+            ❗ Оператор должен вставить этот токен в чат с ботом.
+            """.formatted(careHomeName);
 
-        UniversalResponse response = new UniversalResponse(message);
-        response.addButtonFullRow("📋 Список операторов", "manager_operators");
-        response.addButtonFullRow("🏠 Главное меню", "main_menu");
-        return response;
+        UniversalResponse instructionResponse = new UniversalResponse(instruction);
+        instructionResponse.addButtonFullRow("📋 Список операторов", "manager_operators");
+        instructionResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+        // Отправляем первое сообщение
+        sendResponse(director.getTelegramId(), instructionResponse);
+
+        // ===== 4. ВТОРОЕ СООБЩЕНИЕ (ТОЛЬКО ТОКЕН) =====
+        UniversalResponse tokenResponse = new UniversalResponse(token);
+        // БЕЗ КНОПОК!
+
+        // Отправляем второе сообщение
+        sendResponse(director.getTelegramId(), tokenResponse);
+
+        // ===== 5. ВОЗВРАЩАЕМ ПУСТОЙ ОТВЕТ =====
+        return null;
     }
 
     // ============================================================
@@ -1145,5 +1160,7 @@ public class CareHomeManagementService {
         response.addButton("❌ Отменить", "cancel_action");
         return response;
     }
-
+    private void sendResponse(Long chatId, UniversalResponse response) {
+        messageSender.sendMessage(chatId, response);
+    }
 }

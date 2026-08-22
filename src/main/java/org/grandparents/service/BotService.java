@@ -419,12 +419,17 @@ public class BotService {
         // ===== ВЫБОР ПАНСИОНАТА ДЛЯ ПРИГЛАШЕНИЯ =====
         if (callbackData.startsWith("invite_carehome_")) {
             String param = callbackData.substring("invite_carehome_".length());
+            UniversalResponse response;
             if ("all".equals(param)) {
-                return careHomeManagementService.createInvitation(userId, null);
+                response = careHomeManagementService.createInvitation(userId, null);
             } else {
                 Long careHomeId = Long.parseLong(param);
-                return careHomeManagementService.createInvitation(userId, careHomeId);
+                response = careHomeManagementService.createInvitation(userId, careHomeId);
             }
+            if (response != null) {
+                return response;
+            }
+            return null;  // ← ничего не отправляем
         }
 
 // ===== ПРИНЯТИЕ ОФЕРТЫ ПЕРЕД АНКЕТОЙ =====
