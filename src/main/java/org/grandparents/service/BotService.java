@@ -3585,6 +3585,13 @@ public class BotService {
         return text.substring(0, maxLength);
     }
     private UniversalResponse handleAcceptInvitation(Long userId, Long careHomeId) {
+        // ===== НАХОДИМ АКТИВНОЕ ПРИГЛАШЕНИЕ =====
+        Invitation invitation = invitationService.findFirstByCareHomeId(careHomeId);
+        if (invitation == null) {
+            return responseWithMainMenu("❌ Нет активного приглашения для этого пансионата.");
+        }
+
+        // Проверяем, не является ли пользователь уже оператором
         User user = userService.findByTelegramId(userId).orElse(null);
         if (user != null && user.getAccessLevel() == AccessLevel.OPERATOR) {
             return responseWithMainMenu("✅ Вы уже являетесь оператором.");
@@ -3597,15 +3604,14 @@ public class BotService {
 
         user.setAccessLevel(AccessLevel.OPERATOR);
         user.setCareHomeId(careHomeId);
+        user.setCreatedBy(invitation.getCreatedBy()); // ← теперь invitation существует!
         user.setRegistered(true);
         user.setRegisteredAt(LocalDateTime.now());
+
         if (user.getBonusPoints() == 0) {
             user.setBonusPoints(10);
         }
         userService.saveUser(user);
-
-        // ❌ НЕ ПОМЕЧАЕМ ПРИГЛАШЕНИЕ КАК ИСПОЛЬЗОВАННОЕ!
-        // Потому что приглашение не привязано к конкретному оператору
 
         stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_NAME);
 
