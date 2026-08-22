@@ -109,20 +109,19 @@ public class CareHomeManagementService {
             }
         }
 
-        // Генерируем токен
         int randomCode = 1000 + new Random().nextInt(9000);
         String token = careHomeName + " " + randomCode;
 
         String message = """
-            ✅ **Приглашение создано!**
+            ✅ Приглашение создано!
 
             🏢 Пансионат: **%s**
-            📅 Действительно: **3 дня**
-            🔑 Токен: **%s**
+            📅 Действительно: 3 дня
 
-            📤 Скопируйте текст выше и отправьте его оператору.
+            🔑 Токен: `%s`
+            Для оператора: скопировать Токен из личного чата и вставить в чат бота "ПансАльянс"
 
-            📌 Оператор должен скопировать токен и отправить его в чат с ботом.
+            📤 Отправьте этот токен оператору.
             """.formatted(careHomeName, token);
 
         UniversalResponse response = new UniversalResponse(message);
@@ -130,7 +129,6 @@ public class CareHomeManagementService {
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
-
 
     // ============================================================
     // ===== ПРОСМОТР ПАНСИОНАТА =====
