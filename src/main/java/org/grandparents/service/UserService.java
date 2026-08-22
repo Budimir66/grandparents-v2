@@ -59,4 +59,7 @@ public class UserService {
     public void deleteUser(Long id) {
         userRepository.deleteById(id);
     }
+    public List<User> findByCareHomeIdAndAccessLevel(Long careHomeId, AccessLevel accessLevel) {
+        return userRepository.findByCareHomeIdAndAccessLevel(careHomeId, accessLevel);
+    }
 }

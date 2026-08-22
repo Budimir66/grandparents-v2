@@ -23,6 +23,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     long countByAccessLevel(AccessLevel accessLevel);
     List<User> findAllByAccessLevel(AccessLevel accessLevel);
-
+    List<User> findByCareHomeIdAndAccessLevel(Long careHomeId, AccessLevel accessLevel);
 
 }

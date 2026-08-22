@@ -3602,7 +3602,7 @@ public class BotService {
             return responseWithMainMenu("❌ Пользователь не найден.");
         }
 
-        UniversalResponse response;
+        UniversalResponse response;  // ← ОБЪЯВЛЯЕМ ОДИН РАЗ
 
         switch (state) {
             case AWAITING_OPERATOR_PROFILE_NAME -> {
@@ -3654,7 +3654,7 @@ public class BotService {
 
                 stateService.clearState(userId);
 
-                // Уведомляем директора
+                // ===== УВЕДОМЛЯЕМ ДИРЕКТОРА =====
                 notifyDirector(user);
 
                 response = new UniversalResponse("✅ Профиль сохранён! Добро пожаловать в команду! 🎉");
@@ -3667,5 +3667,48 @@ public class BotService {
                 return responseWithMainMenu("❌ Что-то пошло не так.");
             }
         }
+    }
+    private void notifyDirector(User operator) {
+        // Находим директора по care_home_id
+        List<User> directors = userService.findByCareHomeIdAndAccessLevel(
+                operator.getCareHomeId(),
+                AccessLevel.MANAGER
+        );
+
+        if (directors.isEmpty()) {
+            log.warn("⚠️ Директор не найден для пансионата {}", operator.getCareHomeId());
+            return;
+        }
+
+        User director = directors.get(0);
+
+        CareHome careHome = careHomeService.findById(operator.getCareHomeId());
+
+        String message = """
+            ✅ **Новый оператор зарегистрировался и заполнил профиль!**
+
+            👤 Имя: **%s**
+            📱 Телефон: **%s**
+            📱 WhatsApp: **%s**
+            ✈️ Telegram: **@%s**
+            📧 Email: **%s**
+            🏢 Пансионат: **%s**
+
+            Теперь оператор может работать с заявками.
+            """.formatted(
+                operator.getFirstName() != null ? operator.getFirstName() : "Не указано",
+                operator.getPhone() != null ? operator.getPhone() : "Не указан",
+                operator.getWhatsapp() != null ? operator.getWhatsapp() : "Не указан",
+                operator.getTelegramUsername() != null ? operator.getTelegramUsername() : "Не указан",
+                operator.getEmail() != null ? operator.getEmail() : "Не указан",
+                careHome != null ? careHome.getName() : "Не указан"
+        );
+
+        UniversalResponse response = new UniversalResponse(message);
+        response.addButtonFullRow("👤 Карточка оператора", "view_operator_" + operator.getId());
+        response.addButtonFullRow("📋 Список операторов", "manager_operators");
+
+        Long chatId = director.getChatId() != null ? director.getChatId() : director.getTelegramId();
+        messageSender.sendMessage(chatId, response);
     }
 }
