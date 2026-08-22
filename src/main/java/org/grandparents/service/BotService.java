@@ -373,6 +373,15 @@ public class BotService {
         if (callbackData.equals("help")) {
             return showHelp(userId);
         }
+
+        // ===== ПРОПУСК ШАГОВ АНКЕТЫ =====
+        if (callbackData.startsWith("skip_profile_")) {
+            // Получаем текущее состояние
+            DialogState currentState = stateService.getState(userId);
+            // Передаём в handleDialogInput с текстом = callbackData
+            return handleDialogInput(userId, chatId, callbackData, currentState);
+        }
+
 // ===== ПРИГЛАШЕНИЕ ОПЕРАТОРА =====
         if (callbackData.equals("invite_operator")) {
             return careHomeManagementService.inviteOperator(userId);
