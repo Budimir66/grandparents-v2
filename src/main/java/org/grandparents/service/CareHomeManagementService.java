@@ -93,7 +93,7 @@ public class CareHomeManagementService {
     /**
      * Создаёт приглашение и показывает кодовое слово
      */
-    private UniversalResponse createInvitation(Long directorId, Long careHomeId) {
+    public UniversalResponse createInvitation(Long directorId, Long careHomeId) {
         User director = getUserOrNull(directorId);
         if (director == null) {
             return responseWithMainMenu("❌ Пользователь не найден.");

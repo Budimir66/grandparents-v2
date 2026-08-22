@@ -418,10 +418,10 @@ public class BotService {
         if (callbackData.startsWith("invite_carehome_")) {
             String param = callbackData.substring("invite_carehome_".length());
             if ("all".equals(param)) {
-                return careHomeManagementService.inviteOperator(userId);
+                return careHomeManagementService.createInvitation(userId, null);
             } else {
                 Long careHomeId = Long.parseLong(param);
-                return careHomeManagementService.inviteOperator(userId);
+                return careHomeManagementService.createInvitation(userId, careHomeId);
             }
         }
 
