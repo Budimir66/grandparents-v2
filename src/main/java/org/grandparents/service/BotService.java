@@ -376,7 +376,10 @@ public class BotService {
         if (callbackData.equals("help")) {
             return showHelp(userId);
         }
-
+// ===== ПРИГЛАШЕНИЕ ОПЕРАТОРА =====
+        if (callbackData.equals("invite_operator")) {
+            return careHomeManagementService.inviteOperator(userId);
+        }
         // ===== ВЫБОР ПАНСИОНАТА ДЛЯ ПРИГЛАШЕНИЯ =====
         if (callbackData.startsWith("invite_carehome_")) {
             String param = callbackData.substring("invite_carehome_".length());
