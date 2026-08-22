@@ -142,7 +142,7 @@ public class CareHomeManagementService {
         sendResponse(director.getTelegramId(), tokenResponse);
 
         // ===== 5. ТРЕТЬЕ СООБЩЕНИЕ (КНОПКИ) =====
-        UniversalResponse menuResponse = new UniversalResponse("📌 Выберите действие:");
+        UniversalResponse menuResponse = new UniversalResponse("🔼ТОКЕН ВВЕРХУ ЗДЕСЬ🔼");
         menuResponse.addButtonFullRow("📋 Список операторов", "manager_operators");
         menuResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
 
