@@ -99,10 +99,8 @@ public class CareHomeManagementService {
             return responseWithMainMenu("❌ Пользователь не найден.");
         }
 
-        // ===== СОЗДАЁМ ПРИГЛАШЕНИЕ =====
         Invitation invitation = invitationService.createInvitation(careHomeId, director.getId());
 
-        // ===== ОПРЕДЕЛЯЕМ НАЗВАНИЕ ПАНСИОНАТА =====
         String careHomeName = "ВСЯ СЕТЬ";
         if (careHomeId != null && careHomeId > 0) {
             CareHome ch = careHomeService.findById(careHomeId);
@@ -111,29 +109,28 @@ public class CareHomeManagementService {
             }
         }
 
-        // ===== ГЕНЕРИРУЕМ 4-ЗНАЧНЫЙ КОД =====
+        // Генерируем токен
         int randomCode = 1000 + new Random().nextInt(9000);
-        String codeWord = careHomeName + " " + randomCode;
+        String token = careHomeName + " " + randomCode;
 
         String message = """
             ✅ **Приглашение создано!**
 
             🏢 Пансионат: **%s**
-            📅 Приглашение действительно: **3 дня**
-            ⚠️ Одноразовое использование.
+            📅 Действительно: **3 дня**
+            🔑 Токен: **%s**
 
-            📤 Попросите оператора **написать боту кодовое слово**:
+            📤 Скопируйте текст выше и отправьте его оператору.
 
-            **%s**
-
-            После этого оператор сможет стать оператором.
-            """.formatted(careHomeName, codeWord);
+            📌 Оператор должен скопировать токен и отправить его в чат с ботом.
+            """.formatted(careHomeName, token);
 
         UniversalResponse response = new UniversalResponse(message);
         response.addButtonFullRow("📋 Список операторов", "manager_operators");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
+
 
     // ============================================================
     // ===== ПРОСМОТР ПАНСИОНАТА =====

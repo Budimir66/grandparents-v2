@@ -88,7 +88,9 @@ public class BotService {
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
         if (text != null && !text.isEmpty() && !text.startsWith("/")) {
-            // Убираем цифры из текста (оставляем только название)
+            // Ищем приглашение по токену
+            // Токен = название пансионата + 4 цифры
+            // Убираем цифры, оставляем название для поиска пансионата
             String cleanText = text.replaceAll("\\s+\\d+$", "").trim();
             CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
             if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
