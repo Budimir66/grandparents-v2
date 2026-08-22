@@ -380,6 +380,20 @@ public class BotService {
             return handleDialogInput(userId, chatId, callbackData, currentState);
         }
 
+        // ===== ОДОБРЕНИЕ ПАНСИОНАТА (АДМИН) =====
+        if (callbackData.startsWith("approve_carehome_")) {
+            String careHomeIdStr = callbackData.substring("approve_carehome_".length());
+            Long careHomeId = Long.parseLong(careHomeIdStr);
+            return handleApproveCarehome(userId, careHomeId);
+        }
+
+// ===== ОТКЛОНЕНИЕ ПАНСИОНАТА (АДМИН) =====
+        if (callbackData.startsWith("reject_carehome_")) {
+            String careHomeIdStr = callbackData.substring("reject_carehome_".length());
+            Long careHomeId = Long.parseLong(careHomeIdStr);
+            return handleRejectCarehome(userId, careHomeId);
+        }
+
 // ===== УДАЛЕНИЕ ПРИГЛАШЕНИЯ =====
         if (callbackData.startsWith("delete_invitation_")) {
             Long careHomeId = Long.parseLong(callbackData.substring("delete_invitation_".length()));
@@ -2531,11 +2545,8 @@ public class BotService {
         return response;
     }
 
-    private UniversalResponse handleRejectCarehome(Long userId, String callbackData) {
-        String careHomeIdStr = callbackData.substring("reject_carehome_".length());
-        Long careHomeId = Long.parseLong(careHomeIdStr);
+    private UniversalResponse handleRejectCarehome(Long userId, Long careHomeId) {
         CareHome careHome = careHomeService.findById(careHomeId);
-
         if (careHome == null) {
             return responseWithBackAndMainMenu("❌ Пансионат не найден.", "admin_menu");
         }
