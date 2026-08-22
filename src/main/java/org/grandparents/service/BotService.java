@@ -1198,6 +1198,13 @@ public class BotService {
         log.info("📥 handleDialogInput: userId={}, state={}, text={}", userId, state, text);
         switch (state) {
 
+            case AWAITING_OPERATOR_PROFILE_NAME,
+                 AWAITING_OPERATOR_PROFILE_PHONE,
+                 AWAITING_OPERATOR_PROFILE_WHATSAPP,
+                 AWAITING_OPERATOR_PROFILE_EMAIL -> {
+                return handleOperatorProfile(userId, text, state);
+            }
+
             case EDITING_PROFILE_NAME -> {
                 user = getUserOrNull(userId);
                 if (user == null) {
@@ -3588,5 +3595,77 @@ public class BotService {
         );
         response.addButton("❌ Отменить", "cancel_action");
         return response;
+    }
+    private UniversalResponse handleOperatorProfile(Long userId, String text, DialogState state) {
+        User user = userService.findByTelegramId(userId).orElse(null);
+        if (user == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
+        UniversalResponse response;
+
+        switch (state) {
+            case AWAITING_OPERATOR_PROFILE_NAME -> {
+                user.setFirstName(text.trim());
+                userService.saveUser(user);
+                stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_PHONE);
+                response = new UniversalResponse("📱 Введите ваш **номер телефона** (или 'пропустить'):");
+                response.addButton("⏭️ Пропустить", "skip_profile_phone");
+                response.addButton("❌ Отменить", "cancel_action");
+                return response;
+            }
+
+            case AWAITING_OPERATOR_PROFILE_PHONE -> {
+                if (!text.equals("skip_profile_phone")) {
+                    String phone = text.replaceAll("[^0-9+]", "");
+                    if (!phone.matches("^[+]?[0-9]{10,15}$")) {
+                        response = new UniversalResponse("❌ Неверный формат. Попробуйте снова:");
+                        response.addButton("⏭️ Пропустить", "skip_profile_phone");
+                        response.addButton("❌ Отменить", "cancel_action");
+                        return response;
+                    }
+                    user.setPhone(phone);
+                    userService.saveUser(user);
+                }
+                stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_WHATSAPP);
+                response = new UniversalResponse("📱 Введите ваш **WhatsApp** (или 'пропустить'):");
+                response.addButton("⏭️ Пропустить", "skip_profile_whatsapp");
+                response.addButton("❌ Отменить", "cancel_action");
+                return response;
+            }
+
+            case AWAITING_OPERATOR_PROFILE_WHATSAPP -> {
+                if (!text.equals("skip_profile_whatsapp")) {
+                    user.setWhatsapp(text.trim());
+                    userService.saveUser(user);
+                }
+                stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_EMAIL);
+                response = new UniversalResponse("📧 Введите ваш **Email** (или 'пропустить'):");
+                response.addButton("⏭️ Пропустить", "skip_profile_email");
+                response.addButton("❌ Отменить", "cancel_action");
+                return response;
+            }
+
+            case AWAITING_OPERATOR_PROFILE_EMAIL -> {
+                if (!text.equals("skip_profile_email")) {
+                    user.setEmail(text.trim());
+                    userService.saveUser(user);
+                }
+
+                stateService.clearState(userId);
+
+                // Уведомляем директора
+                notifyDirector(user);
+
+                response = new UniversalResponse("✅ Профиль сохранён! Добро пожаловать в команду! 🎉");
+                response.addButton("📋 Мои заявки", "menu_requests");
+                response.addButton("🏠 Главное меню", "main_menu");
+                return response;
+            }
+
+            default -> {
+                return responseWithMainMenu("❌ Что-то пошло не так.");
+            }
+        }
     }
 }
