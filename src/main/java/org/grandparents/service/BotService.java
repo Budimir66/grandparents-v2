@@ -3750,7 +3750,8 @@ public class BotService {
         messageSender.sendMessage(chatId, response);
     }
     private UniversalResponse handleDeleteInvitation(Long userId, Long careHomeId) {
-        User user = getUserOrNull(userId);
+        // ===== НАХОДИМ ДИРЕКТОРА ПО TELEGRAM_ID =====
+        User user = userService.findByTelegramId(userId).orElse(null);
         if (user == null || user.getAccessLevel() != AccessLevel.MANAGER) {
             return responseWithMainMenu("❌ Только директор может удалять приглашения.");
         }
@@ -3760,12 +3761,11 @@ public class BotService {
             return responseWithMainMenu("❌ Нет активного приглашения для этого пансионата.");
         }
 
-        // Проверяем, что директор — владелец приглашения
-        if (!invitation.getCreatedBy().equals(userId)) {
+        // ===== СРАВНИВАЕМ ID ПОЛЬЗОВАТЕЛЯ В БД =====
+        if (!invitation.getCreatedBy().equals(user.getId())) {
             return responseWithMainMenu("❌ Это не ваше приглашение.");
         }
 
-        // Удаляем приглашение
         invitationService.deleteInvitation(invitation.getId());
 
         CareHome careHome = careHomeService.findById(careHomeId);
