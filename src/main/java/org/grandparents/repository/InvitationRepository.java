@@ -11,7 +11,10 @@ import java.util.Optional;
 public interface InvitationRepository extends JpaRepository<Invitation, Long> {
 
     Optional<Invitation> findByToken(String token);
-    Optional<Invitation> findByCareHomeIdAndUsedFalse(Long careHomeId);
-    long countByCareHomeIdAndUsedFalse(Long careHomeId);
-    boolean existsByCareHomeIdAndUsedFalseAndExpiresAtAfter(Long careHomeId, LocalDateTime now);
+
+    Optional<Invitation> findById(Long id);
+
+    Optional<Invitation> findFirstByCareHomeIdAndUsedFalseAndDeletedFalseOrderByCreatedAtDesc(Long careHomeId);
+
+    boolean existsByCareHomeIdAndUsedFalseAndDeletedFalseAndExpiresAtAfter(Long careHomeId, LocalDateTime now);
 }

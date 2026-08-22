@@ -376,6 +376,18 @@ public class BotService {
 
         // ===== ПРОПУСК ШАГОВ АНКЕТЫ =====
         if (callbackData.startsWith("skip_profile_")) {
+            DialogState currentState = stateService.getState(userId);
+            return handleDialogInput(userId, chatId, callbackData, currentState);
+        }
+
+// ===== УДАЛЕНИЕ ПРИГЛАШЕНИЯ =====
+        if (callbackData.startsWith("delete_invitation_")) {
+            Long careHomeId = Long.parseLong(callbackData.substring("delete_invitation_".length()));
+            return handleDeleteInvitation(userId, careHomeId);
+        }
+
+        // ===== ПРОПУСК ШАГОВ АНКЕТЫ =====
+        if (callbackData.startsWith("skip_profile_")) {
             // Получаем текущее состояние
             DialogState currentState = stateService.getState(userId);
             // Передаём в handleDialogInput с текстом = callbackData
@@ -3659,6 +3671,8 @@ public class BotService {
                 }
 
                 stateService.clearState(userId);
+
+                // ===== УВЕДОМЛЯЕМ ДИРЕКТОРА =====
                 notifyDirector(user);
 
                 response = new UniversalResponse("✅ Профиль сохранён! 🎉");
@@ -3671,27 +3685,86 @@ public class BotService {
         }
     }
     private void notifyDirector(User operator) {
+        log.info("📨 Отправляем уведомление директору для оператора {}", operator.getId());
+
+        if (operator.getCareHomeId() == null) {
+            log.warn("⚠️ У оператора нет careHomeId");
+            return;
+        }
+
         List<User> directors = userService.findByCareHomeIdAndAccessLevel(
-                operator.getCareHomeId(), AccessLevel.MANAGER
+                operator.getCareHomeId(),
+                AccessLevel.MANAGER
         );
-        if (directors.isEmpty()) return;
+
+        if (directors.isEmpty()) {
+            log.warn("⚠️ Директор не найден для пансионата {}", operator.getCareHomeId());
+            return;
+        }
 
         User director = directors.get(0);
+        log.info("👤 Директор найден: {} ({})", director.getFirstName(), director.getTelegramId());
+
         CareHome careHome = careHomeService.findById(operator.getCareHomeId());
 
-        String message = "✅ **Новый оператор зарегистрирован!**\n\n" +
-                "👤 Имя: " + operator.getFirstName() + "\n" +
-                "📱 Телефон: " + (operator.getPhone() != null ? operator.getPhone() : "не указан") + "\n" +
-                "📱 WhatsApp: " + (operator.getWhatsapp() != null ? operator.getWhatsapp() : "не указан") + "\n" +
-                "✈️ Telegram: @" + (operator.getTelegramUsername() != null ? operator.getTelegramUsername() : "не указан") + "\n" +
-                "📧 Email: " + (operator.getEmail() != null ? operator.getEmail() : "не указан") + "\n" +
-                "🏢 Пансионат: " + (careHome != null ? careHome.getName() : "не указан");
+        // Находим активное приглашение для этого пансионата
+        Invitation invitation = invitationService.findFirstByCareHomeId(operator.getCareHomeId());
+        boolean hasActiveInvitation = invitation != null && invitationService.isValid(invitation);
+
+        String message = """
+            ✅ **Новый оператор зарегистрировался и заполнил профиль!**
+
+            👤 Имя: **%s**
+            📱 Телефон: **%s**
+            📱 WhatsApp: **%s**
+            ✈️ Telegram: **@%s**
+            📧 Email: **%s**
+            🏢 Пансионат: **%s**
+
+            Теперь оператор может работать с заявками.
+            """.formatted(
+                operator.getFirstName() != null ? operator.getFirstName() : "Не указано",
+                operator.getPhone() != null ? operator.getPhone() : "Не указан",
+                operator.getWhatsapp() != null ? operator.getWhatsapp() : "Не указан",
+                operator.getTelegramUsername() != null ? operator.getTelegramUsername() : "Не указан",
+                operator.getEmail() != null ? operator.getEmail() : "Не указан",
+                careHome != null ? careHome.getName() : "Не указан"
+        );
 
         UniversalResponse response = new UniversalResponse(message);
         response.addButtonFullRow("👤 Карточка оператора", "view_operator_" + operator.getId());
         response.addButtonFullRow("📋 Список операторов", "manager_operators");
 
+        if (hasActiveInvitation) {
+            response.addButtonFullRow("🗑️ Удалить приглашение", "delete_invitation_" + operator.getCareHomeId());
+        }
+
         Long chatId = director.getChatId() != null ? director.getChatId() : director.getTelegramId();
+        log.info("📤 Отправляем уведомление директору в чат {}", chatId);
         messageSender.sendMessage(chatId, response);
+    }
+    private UniversalResponse handleDeleteInvitation(Long userId, Long careHomeId) {
+        User user = getUserOrNull(userId);
+        if (user == null || user.getAccessLevel() != AccessLevel.MANAGER) {
+            return responseWithMainMenu("❌ Только директор может удалять приглашения.");
+        }
+
+        Invitation invitation = invitationService.findFirstByCareHomeId(careHomeId);
+        if (invitation == null) {
+            return responseWithMainMenu("❌ Активное приглашение не найдено.");
+        }
+
+        if (!invitation.getCreatedBy().equals(userId)) {
+            return responseWithMainMenu("❌ Это не ваше приглашение.");
+        }
+
+        invitationService.deleteInvitation(invitation.getId());
+
+        CareHome careHome = careHomeService.findById(careHomeId);
+
+        return responseWithMainMenu(
+                "✅ Приглашение для пансионата **" + careHome.getName() + "** удалено.\n\n" +
+                        "📌 Уже зарегистрированные операторы продолжают работать."
+        );
     }
 }

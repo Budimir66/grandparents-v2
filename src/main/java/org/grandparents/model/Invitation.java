@@ -15,7 +15,7 @@ public class Invitation {
     private String token;
 
     @Column(name = "care_home_id")
-    private Long careHomeId;  // null = вся сеть
+    private Long careHomeId;
 
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
@@ -28,6 +28,9 @@ public class Invitation {
 
     @Column(name = "is_used", nullable = false)
     private boolean used = false;
+
+    @Column(name = "is_deleted", nullable = false)
+    private boolean deleted = false;  // ← НОВОЕ ПОЛЕ
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;
@@ -44,6 +47,7 @@ public class Invitation {
         this.createdAt = LocalDateTime.now();
         this.expiresAt = expiresAt;
         this.used = false;
+        this.deleted = false;
     }
 
     // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
@@ -67,6 +71,9 @@ public class Invitation {
 
     public boolean isUsed() { return used; }
     public void setUsed(boolean used) { this.used = used; }
+
+    public boolean isDeleted() { return deleted; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
 
     public LocalDateTime getUsedAt() { return usedAt; }
     public void setUsedAt(LocalDateTime usedAt) { this.usedAt = usedAt; }

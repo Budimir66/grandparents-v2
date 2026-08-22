@@ -29,8 +29,19 @@ public class InvitationService {
         return invitationRepository.findByToken(token).orElse(null);
     }
 
-    public Invitation findByCareHomeId(Long careHomeId) {
-        return invitationRepository.findByCareHomeIdAndUsedFalse(careHomeId).orElse(null);
+    public Invitation findById(Long id) {
+        return invitationRepository.findById(id).orElse(null);
+    }
+
+    public Invitation findFirstByCareHomeId(Long careHomeId) {
+        return invitationRepository
+                .findFirstByCareHomeIdAndUsedFalseAndDeletedFalseOrderByCreatedAtDesc(careHomeId)
+                .orElse(null);
+    }
+
+    public boolean hasActiveInvitation(Long careHomeId) {
+        return invitationRepository
+                .existsByCareHomeIdAndUsedFalseAndDeletedFalseAndExpiresAtAfter(careHomeId, LocalDateTime.now());
     }
 
     @Transactional
@@ -41,15 +52,19 @@ public class InvitationService {
         invitationRepository.save(invitation);
     }
 
+    @Transactional
+    public void deleteInvitation(Long invitationId) {
+        Invitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new RuntimeException("Приглашение не найдено"));
+        invitation.setDeleted(true);
+        invitationRepository.save(invitation);
+    }
+
     public boolean isValid(Invitation invitation) {
         if (invitation == null) return false;
         if (invitation.isUsed()) return false;
+        if (invitation.isDeleted()) return false;
         if (invitation.getExpiresAt().isBefore(LocalDateTime.now())) return false;
         return true;
-    }
-    public boolean hasActiveInvitation(Long careHomeId) {
-        return invitationRepository.existsByCareHomeIdAndUsedFalseAndExpiresAtAfter(
-                careHomeId, LocalDateTime.now()
-        );
     }
 }

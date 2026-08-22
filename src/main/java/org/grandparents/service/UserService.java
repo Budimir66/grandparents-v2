@@ -62,4 +62,5 @@ public class UserService {
     public List<User> findByCareHomeIdAndAccessLevel(Long careHomeId, AccessLevel accessLevel) {
         return userRepository.findByCareHomeIdAndAccessLevel(careHomeId, accessLevel);
     }
+
 }
