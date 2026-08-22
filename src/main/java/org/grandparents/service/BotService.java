@@ -3602,20 +3602,19 @@ public class BotService {
             return responseWithMainMenu("❌ Пользователь не найден.");
         }
 
-        UniversalResponse response;  // ← ОБЪЯВЛЯЕМ ОДИН РАЗ
+        UniversalResponse response;
 
         switch (state) {
-            case AWAITING_OPERATOR_PROFILE_NAME -> {
+            case AWAITING_OPERATOR_PROFILE_NAME:
                 user.setFirstName(text.trim());
                 userService.saveUser(user);
                 stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_PHONE);
-                response = new UniversalResponse("📱 Введите ваш **номер телефона** (или 'пропустить'):");
+                response = new UniversalResponse("📱 Введите номер телефона (или 'пропустить'):");
                 response.addButton("⏭️ Пропустить", "skip_profile_phone");
                 response.addButton("❌ Отменить", "cancel_action");
                 return response;
-            }
 
-            case AWAITING_OPERATOR_PROFILE_PHONE -> {
+            case AWAITING_OPERATOR_PROFILE_PHONE:
                 if (!text.equals("skip_profile_phone")) {
                     String phone = text.replaceAll("[^0-9+]", "");
                     if (!phone.matches("^[+]?[0-9]{10,15}$")) {
@@ -3628,81 +3627,56 @@ public class BotService {
                     userService.saveUser(user);
                 }
                 stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_WHATSAPP);
-                response = new UniversalResponse("📱 Введите ваш **WhatsApp** (или 'пропустить'):");
+                response = new UniversalResponse("📱 Введите WhatsApp (или 'пропустить'):");
                 response.addButton("⏭️ Пропустить", "skip_profile_whatsapp");
                 response.addButton("❌ Отменить", "cancel_action");
                 return response;
-            }
 
-            case AWAITING_OPERATOR_PROFILE_WHATSAPP -> {
+            case AWAITING_OPERATOR_PROFILE_WHATSAPP:
                 if (!text.equals("skip_profile_whatsapp")) {
                     user.setWhatsapp(text.trim());
                     userService.saveUser(user);
                 }
                 stateService.setState(userId, DialogState.AWAITING_OPERATOR_PROFILE_EMAIL);
-                response = new UniversalResponse("📧 Введите ваш **Email** (или 'пропустить'):");
+                response = new UniversalResponse("📧 Введите Email (или 'пропустить'):");
                 response.addButton("⏭️ Пропустить", "skip_profile_email");
                 response.addButton("❌ Отменить", "cancel_action");
                 return response;
-            }
 
-            case AWAITING_OPERATOR_PROFILE_EMAIL -> {
+            case AWAITING_OPERATOR_PROFILE_EMAIL:
                 if (!text.equals("skip_profile_email")) {
                     user.setEmail(text.trim());
                     userService.saveUser(user);
                 }
 
                 stateService.clearState(userId);
-
-                // ===== УВЕДОМЛЯЕМ ДИРЕКТОРА =====
                 notifyDirector(user);
 
-                response = new UniversalResponse("✅ Профиль сохранён! Добро пожаловать в команду! 🎉");
+                response = new UniversalResponse("✅ Профиль сохранён! 🎉");
                 response.addButton("📋 Мои заявки", "menu_requests");
                 response.addButton("🏠 Главное меню", "main_menu");
                 return response;
-            }
 
-            default -> {
+            default:
                 return responseWithMainMenu("❌ Что-то пошло не так.");
-            }
         }
     }
     private void notifyDirector(User operator) {
-        // Находим директора по care_home_id
         List<User> directors = userService.findByCareHomeIdAndAccessLevel(
-                operator.getCareHomeId(),
-                AccessLevel.MANAGER
+                operator.getCareHomeId(), AccessLevel.MANAGER
         );
-
-        if (directors.isEmpty()) {
-            log.warn("⚠️ Директор не найден для пансионата {}", operator.getCareHomeId());
-            return;
-        }
+        if (directors.isEmpty()) return;
 
         User director = directors.get(0);
-
         CareHome careHome = careHomeService.findById(operator.getCareHomeId());
 
-        String message = """
-            ✅ **Новый оператор зарегистрировался и заполнил профиль!**
-
-            👤 Имя: **%s**
-            📱 Телефон: **%s**
-            📱 WhatsApp: **%s**
-            ✈️ Telegram: **@%s**
-            📧 Email: **%s**
-            🏢 Пансионат: **%s**
-
-            Теперь оператор может работать с заявками.
-            """.formatted(
-                operator.getFirstName() != null ? operator.getFirstName() : "Не указано",
-                operator.getPhone() != null ? operator.getPhone() : "Не указан",
-                operator.getWhatsapp() != null ? operator.getWhatsapp() : "Не указан",
-                operator.getTelegramUsername() != null ? operator.getTelegramUsername() : "Не указан",
-                operator.getEmail() != null ? operator.getEmail() : "Не указан",
-                careHome != null ? careHome.getName() : "Не указан"
-        );
+        String message = "✅ **Новый оператор зарегистрирован!**\n\n" +
+                "👤 Имя: " + operator.getFirstName() + "\n" +
+                "📱 Телефон: " + (operator.getPhone() != null ? operator.getPhone() : "не указан") + "\n" +
+                "📱 WhatsApp: " + (operator.getWhatsapp() != null ? operator.getWhatsapp() : "не указан") + "\n" +
+                "✈️ Telegram: @" + (operator.getTelegramUsername() != null ? operator.getTelegramUsername() : "не указан") + "\n" +
+                "📧 Email: " + (operator.getEmail() != null ? operator.getEmail() : "не указан") + "\n" +
+                "🏢 Пансионат: " + (careHome != null ? careHome.getName() : "не указан");
 
         UniversalResponse response = new UniversalResponse(message);
         response.addButtonFullRow("👤 Карточка оператора", "view_operator_" + operator.getId());
