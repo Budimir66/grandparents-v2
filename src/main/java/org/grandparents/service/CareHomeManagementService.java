@@ -8,10 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -93,14 +90,19 @@ public class CareHomeManagementService {
     /**
      * Создаёт приглашение и показывает кодовое слово
      */
+    /**
+     * Создаёт приглашение и показывает кодовое слово
+     */
     private UniversalResponse createInvitation(Long directorId, Long careHomeId) {
         User director = getUserOrNull(directorId);
         if (director == null) {
             return responseWithMainMenu("❌ Пользователь не найден.");
         }
 
+        // ===== СОЗДАЁМ ПРИГЛАШЕНИЕ =====
         Invitation invitation = invitationService.createInvitation(careHomeId, director.getId());
 
+        // ===== ОПРЕДЕЛЯЕМ НАЗВАНИЕ ПАНСИОНАТА =====
         String careHomeName = "ВСЯ СЕТЬ";
         if (careHomeId != null && careHomeId > 0) {
             CareHome ch = careHomeService.findById(careHomeId);
@@ -109,6 +111,10 @@ public class CareHomeManagementService {
             }
         }
 
+        // ===== ГЕНЕРИРУЕМ 4-ЗНАЧНЫЙ КОД =====
+        int randomCode = 1000 + new Random().nextInt(9000);
+        String codeWord = careHomeName + " " + randomCode;
+
         String message = """
             ✅ **Приглашение создано!**
 
@@ -116,12 +122,12 @@ public class CareHomeManagementService {
             📅 Приглашение действительно: **3 дня**
             ⚠️ Одноразовое использование.
 
-            📤 Попросите оператора **написать боту название пансионата**:
+            📤 Попросите оператора **написать боту кодовое слово**:
 
             **%s**
 
             После этого оператор сможет стать оператором.
-            """.formatted(careHomeName, careHomeName);
+            """.formatted(careHomeName, codeWord);
 
         UniversalResponse response = new UniversalResponse(message);
         response.addButtonFullRow("📋 Список операторов", "manager_operators");

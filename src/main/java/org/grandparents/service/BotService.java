@@ -88,7 +88,9 @@ public class BotService {
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
         if (text != null && !text.isEmpty() && !text.startsWith("/")) {
-            CareHome careHome = careHomeService.findByNameIgnoreCase(text.trim());  // ← БЕЗ УЧЁТА РЕГИСТРА
+            // Убираем цифры из текста (оставляем только название)
+            String cleanText = text.replaceAll("\\s+\\d+$", "").trim();
+            CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
             if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
                 return handleAcceptInvitation(userId, careHome.getId());
             }
