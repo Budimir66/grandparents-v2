@@ -122,26 +122,34 @@ public class CareHomeManagementService {
             🏢 Пансионат: %s
             📅 Действительно: 3 дня
 
-            📤 Отправьте оператору токен из личного чата.
+            📤 Токен это название пансионата и четырёхзначное число вместе - всё нижнее сообщение. 
+            🔽 Перешлите оператору токен из чата ниже 🔽.
 
-            ❗ Оператор должен вставить этот токен в чат с ботом.
+            ❗ Для регистрации оператор должен вставить токен в чат с ботом "ПансАльянс".
             """.formatted(careHomeName);
 
         UniversalResponse instructionResponse = new UniversalResponse(instruction);
-        instructionResponse.addButtonFullRow("📋 Список операторов", "manager_operators");
-        instructionResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
+        // ❌ БЕЗ КНОПОК!
 
         // Отправляем первое сообщение
         sendResponse(director.getTelegramId(), instructionResponse);
 
         // ===== 4. ВТОРОЕ СООБЩЕНИЕ (ТОЛЬКО ТОКЕН) =====
         UniversalResponse tokenResponse = new UniversalResponse(token);
-        // БЕЗ КНОПОК!
+        // ❌ БЕЗ КНОПОК!
 
         // Отправляем второе сообщение
         sendResponse(director.getTelegramId(), tokenResponse);
 
-        // ===== 5. ВОЗВРАЩАЕМ ПУСТОЙ ОТВЕТ =====
+        // ===== 5. ТРЕТЬЕ СООБЩЕНИЕ (КНОПКИ) =====
+        UniversalResponse menuResponse = new UniversalResponse("📌 Выберите действие:");
+        menuResponse.addButtonFullRow("📋 Список операторов", "manager_operators");
+        menuResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+        // Отправляем третье сообщение с кнопками
+        sendResponse(director.getTelegramId(), menuResponse);
+
+        // ===== 6. ВОЗВРАЩАЕМ null =====
         return null;
     }
 
