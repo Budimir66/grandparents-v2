@@ -460,12 +460,12 @@ public class AdminService {
             return responseWithBackAndMainMenu("❌ Пансионат не найден.", "admin_menu");
         }
 
-        User admin = getUserOrNull(userId);
-        if (!isAdmin(admin)) {
+        User admin = userService.findByTelegramId(userId).orElse(null);
+        if (admin == null || admin.getAccessLevel() != AccessLevel.ADMIN) {
             return responseWithMainMenu("❌ Доступ запрещён.");
         }
 
-        // ===== ОДОБРЯЕМ ПАНСИОНАТ =====
+        // Одобряем пансионат
         careHome.setStatus("APPROVED");
         careHome.setActive(true);
         careHome.setModeratedBy(userId);
@@ -475,60 +475,46 @@ public class AdminService {
         careHome.setSubscriptionEnd(LocalDateTime.now().plusDays(30));
         careHomeService.save(careHome);
 
-        // ===== НАХОДИМ АВТОРА ПАНСИОНАТА =====
-        // ===== НАХОДИМ АВТОРА ПАНСИОНАТА =====
+        // ============================================================
+        // ===== УВЕДОМЛЯЕМ АВТОРА (ДИРЕКТОРА) =====
+        // ============================================================
         Long authorId = careHome.getProposedBy();
         if (authorId != null) {
-            User author = getUserOrNull(authorId);
+            User author = userService.findById(authorId);  // ← authorId — это id пользователя
             if (author != null) {
-                // ===== ЕСЛИ АВТОР БЫЛ ГОСТЕМ (GUEST) — СТАНОВИТСЯ MANAGER =====
-                // ===== ЕСЛИ АВТОР БЫЛ ОПЕРАТОРОМ (OPERATOR) — ОСТАЁТСЯ OPERATOR =====
+                // Обновляем статус автора
                 if (author.getAccessLevel() == AccessLevel.GUEST) {
                     author.setAccessLevel(AccessLevel.MANAGER);
-                    log.info("👤 Пользователь {} стал директором пансионата {}",
-                            author.getTelegramId(), careHome.getName());
-
-                    // Уведомляем автора о статусе директора
-                    sendNotification(author.getTelegramId(),
-                            "🎉 **Поздравляем! Ваш пансионат одобрен!**\n\n" +
-                                    "🏢 **Пансионат:** " + careHome.getName() + "\n" +
-                                    "📍 **Адрес:** " + careHome.getAddress() + "\n\n" +
-                                    "✅ Теперь вы **директор** пансионата!\n" +
-                                    "📌 Вам доступна панель управления:\n" +
-                                    "• Регистрация операторов\n" +
-                                    "• Управление пансионатом\n" +
-                                    "• Просмотр статистики\n\n" +
-                                    "🔑 Чтобы зарегистрировать оператора,\n" +
-                                    "перейдите в раздел 'Мои пансионаты'.",
-                            "🏢 Мои пансионаты", "my_carehomes"
-                    );
-                } else if (author.getAccessLevel() == AccessLevel.OPERATOR) {
-                    // Оператор остаётся оператором, просто привязываем к пансионату
-                    log.info("👤 Оператор {} привязан к пансионату {}",
-                            author.getTelegramId(), careHome.getName());
-
-                    sendNotification(author.getTelegramId(),
-                            "✅ **Пансионат одобрен!**\n\n" +
-                                    "🏢 **Пансионат:** " + careHome.getName() + "\n" +
-                                    "📍 **Адрес:** " + careHome.getAddress() + "\n\n" +
-                                    "📌 Теперь вы привязаны к этому пансионату.\n" +
-                                    "Вы можете работать с заявками.",
-                            "🏢 Мои пансионаты", "my_carehomes"
-                    );
                 }
-
                 author.setCareHomeId(careHome.getId());
                 userService.saveUser(author);
+
+                log.info("👤 Пользователь {} может управлять пансионатом {}",
+                        author.getTelegramId(), careHome.getName());
+
+                // Отправляем уведомление
+                sendNotification(author.getTelegramId(),
+                        "🎉 **Поздравляем! Ваш пансионат одобрен!**\n\n" +
+                                "🏢 **Пансионат:** " + careHome.getName() + "\n" +
+                                "📍 **Адрес:** " + careHome.getAddress() + "\n\n" +
+                                "✅ Теперь вы можете управлять пансионатом!\n" +
+                                "📌 Вам доступна панель управления:\n" +
+                                "• Регистрация операторов\n" +
+                                "• Управление пансионатом\n" +
+                                "• Просмотр статистики\n\n" +
+                                "🔑 Чтобы зарегистрировать оператора,\n" +
+                                "перейдите в раздел 'Мои пансионаты'.\n\n" +
+                                "🚀 Удачи!",
+                        "🏢 Мои пансионаты", "my_carehomes"
+                );
             }
         }
 
-
-        // ===== ОТВЕТ АДМИНИСТРАТОРУ =====
+        // Ответ администратору
         UniversalResponse response = new UniversalResponse(
                 "✅ Пансионат **" + careHome.getName() + "** одобрен!\n\n" +
                         "📅 Бесплатный период: 30 дней\n" +
-                        "📆 До: " + careHome.getSubscriptionEnd() + "\n\n" +
-                        "👤 Автор стал директором пансионата."
+                        "📆 До: " + careHome.getSubscriptionEnd()
         );
         response.addButtonFullRow("⚙️ Админ-панель", "admin_menu");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");

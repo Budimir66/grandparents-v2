@@ -384,7 +384,7 @@ public class BotService {
         if (callbackData.startsWith("approve_carehome_")) {
             String careHomeIdStr = callbackData.substring("approve_carehome_".length());
             Long careHomeId = Long.parseLong(careHomeIdStr);
-            return handleApproveCarehome(userId, careHomeId);
+            return adminService.handleApproveCarehome(userId, careHomeId);
         }
 
 // ===== ОТКЛОНЕНИЕ ПАНСИОНАТА (АДМИН) =====
@@ -2477,73 +2477,6 @@ public class BotService {
     // ===== МЕТОДЫ ДЛЯ РАБОТЫ С ПАНСИОНАТАМИ (АДМИН) =====
     // ============================================================
 
-  /**
-     * Одобрение пансионата администратором
-     */
-    public UniversalResponse handleApproveCarehome(Long userId, Long careHomeId) {
-        CareHome careHome = careHomeService.findById(careHomeId);
-        if (careHome == null) {
-            return responseWithBackAndMainMenu("❌ Пансионат не найден.", "admin_menu");
-        }
-
-        User admin = getUserOrNull(userId);
-        if (!isAdmin(admin)) {
-            return responseWithMainMenu("❌ Доступ запрещён.");
-        }
-
-        // ===== ОДОБРЯЕМ ПАНСИОНАТ =====
-        careHome.setStatus("APPROVED");
-        careHome.setActive(true);
-        careHome.setModeratedBy(userId);
-        careHome.setModeratedAt(LocalDateTime.now());
-        careHome.setSubscribed(true);
-        careHome.setSubscriptionStart(LocalDateTime.now());
-        careHome.setSubscriptionEnd(LocalDateTime.now().plusDays(30));
-        careHomeService.save(careHome);
-
-        // ===== НАХОДИМ АВТОРА ПАНСИОНАТА =====
-        Long authorId = careHome.getProposedBy();
-        if (authorId != null) {
-            User author = getUserOrNull(authorId);
-            if (author != null) {
-                // ===== МЕНЯЕМ СТАТУС НА MANAGER (ДИРЕКТОР) =====
-                // НЕ НАЧИСЛЯЕМ БОНУСЫ!
-                author.setAccessLevel(AccessLevel.MANAGER);
-                author.setCareHomeId(careHome.getId());
-                userService.saveUser(author);
-
-                log.info("👤 Пользователь {} может управлять пансионатом {}",
-                        author.getTelegramId(), careHome.getName());
-
-                // ===== УВЕДОМЛЯЕМ АВТОРА =====
-                sendNotification(author.getTelegramId(),
-                        "🎉 **Поздравляем! Ваш пансионат одобрен!**\n\n" +
-                                "🏢 **Пансионат:** " + careHome.getName() + "\n" +
-                                "📍 **Адрес:** " + careHome.getAddress() + "\n\n" +
-                                "✅ Теперь вы можете управлять пансионатом!\n" +
-                                "📌 Вам доступна панель управления:\n" +
-                                "• Регистрация операторов\n" +
-                                "• Управление пансионатом\n" +
-                                "• Просмотр статистики\n\n" +
-                                "🔑 Чтобы зарегистрировать оператора,\n" +
-                                "перейдите в раздел 'Мои пансионаты'.\n\n" +
-                                "🚀 Удачи!",
-                        "🏢 Мои пансионаты", "my_carehomes"
-                );
-            }
-        }
-
-        // ===== ОТВЕТ АДМИНИСТРАТОРУ =====
-        UniversalResponse response = new UniversalResponse(
-                "✅ Пансионат **" + careHome.getName() + "** одобрен!\n\n" +
-                        "📅 Бесплатный период: 30 дней\n" +
-                        "📆 До: " + careHome.getSubscriptionEnd() + "\n\n" +
-                        "👤 Автор стал директором пансионата."
-        );
-        response.addButtonFullRow("⚙️ Админ-панель", "admin_menu");
-        response.addButtonFullRow("🏠 Главное меню", "main_menu");
-        return response;
-    }
 
     private UniversalResponse handleRejectCarehome(Long userId, Long careHomeId) {
         CareHome careHome = careHomeService.findById(careHomeId);
