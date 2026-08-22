@@ -3393,7 +3393,10 @@ public class BotService {
             careHome.setWebsite(website);
         }
         careHome.setStatus("PENDING");
-        careHome.setProposedBy(userId);
+        User user = userService.findByTelegramId(userId).orElse(null);
+        if (user != null) {
+            careHome.setProposedBy(user.getId());  // сохраняем id пользователя (8)
+        }
         careHome.setProposedAt(LocalDateTime.now());
         careHome.setActive(false);
         careHome.setSubscribed(false);
