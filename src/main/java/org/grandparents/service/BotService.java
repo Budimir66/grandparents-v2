@@ -88,7 +88,7 @@ public class BotService {
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
         if (text != null && !text.isEmpty() && !text.startsWith("/")) {
-            CareHome careHome = careHomeService.findByNameExact(text.trim());
+            CareHome careHome = careHomeService.findByNameIgnoreCase(text.trim());  // ← БЕЗ УЧЁТА РЕГИСТРА
             if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
                 return handleAcceptInvitation(userId, careHome.getId());
             }
@@ -3687,27 +3687,27 @@ public class BotService {
     private void notifyDirector(User operator) {
         log.info("📨 Отправляем уведомление директору для оператора {}", operator.getId());
 
-        if (operator.getCareHomeId() == null) {
-            log.warn("⚠️ У оператора нет careHomeId");
+        if (operator.getCreatedBy() == null) {
+            log.warn("⚠️ У оператора нет createdBy (директор не указан)");
             return;
         }
 
-        List<User> directors = userService.findByCareHomeIdAndAccessLevel(
-                operator.getCareHomeId(),
-                AccessLevel.MANAGER
-        );
-
-        if (directors.isEmpty()) {
-            log.warn("⚠️ Директор не найден для пансионата {}", operator.getCareHomeId());
+        // ===== НАХОДИМ ДИРЕКТОРА ПО ID =====
+        User director = userService.findById(operator.getCreatedBy());
+        if (director == null) {
+            log.warn("⚠️ Директор с ID {} не найден", operator.getCreatedBy());
             return;
         }
 
-        User director = directors.get(0);
         log.info("👤 Директор найден: {} ({})", director.getFirstName(), director.getTelegramId());
 
         CareHome careHome = careHomeService.findById(operator.getCareHomeId());
 
-        // Находим активное приглашение для этого пансионата
+        // ❌ УДАЛИТЬ ЭТОТ БЛОК — он дублирует поиск директора!
+        // List<User> directors = userService.findByCareHomeIdAndAccessLevel(...);
+        // if (directors.isEmpty()) { ... }
+
+        // Находим активное приглашение
         Invitation invitation = invitationService.findFirstByCareHomeId(operator.getCareHomeId());
         boolean hasActiveInvitation = invitation != null && invitationService.isValid(invitation);
 
@@ -3751,13 +3751,15 @@ public class BotService {
 
         Invitation invitation = invitationService.findFirstByCareHomeId(careHomeId);
         if (invitation == null) {
-            return responseWithMainMenu("❌ Активное приглашение не найдено.");
+            return responseWithMainMenu("❌ Нет активного приглашения для этого пансионата.");
         }
 
+        // Проверяем, что директор — владелец приглашения
         if (!invitation.getCreatedBy().equals(userId)) {
             return responseWithMainMenu("❌ Это не ваше приглашение.");
         }
 
+        // Удаляем приглашение
         invitationService.deleteInvitation(invitation.getId());
 
         CareHome careHome = careHomeService.findById(careHomeId);

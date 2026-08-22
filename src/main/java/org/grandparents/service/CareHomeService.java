@@ -48,4 +48,7 @@ public class CareHomeService {
     public List<CareHome> findActive() {
         return careHomeRepository.findByIsActiveTrueAndStatus("APPROVED");
     }
+    public CareHome findByNameIgnoreCase(String name) {
+        return careHomeRepository.findByNameIgnoreCase(name);
+    }
 }

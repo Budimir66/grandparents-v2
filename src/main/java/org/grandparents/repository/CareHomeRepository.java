@@ -50,6 +50,7 @@ public interface CareHomeRepository extends JpaRepository<CareHome, Long> {
     @Query("SELECT ch FROM CareHome ch LEFT JOIN FETCH ch.photos WHERE ch.id = :id")
     Optional<CareHome> findByIdWithPhotos(@Param("id") Long id);
     CareHome findByName(String name);
+    CareHome findByNameIgnoreCase(String name);
     List<CareHome> findByIsActiveTrueAndIsSubscribedTrue();
     List<CareHome> findByProposedBy(Long proposedBy);
     List<CareHome> findByIsActiveTrueAndStatus(String status);

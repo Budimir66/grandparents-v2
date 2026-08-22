@@ -146,6 +146,8 @@ public class User {
     @Column(name = "email")
     private String email;
 
+    @Column(name = "created_by")
+    private Long createdBy;
 
 
 
@@ -162,6 +164,9 @@ public class User {
     }
 
     // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
+
+    public Long getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
 
     public Boolean getIsSubscribed() {
         return isSubscribed;
