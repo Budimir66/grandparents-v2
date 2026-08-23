@@ -182,6 +182,30 @@ public class MaxWebhookHandler {
                 return "OK";
             }
 
+            // ===== ПРОВЕРЯЕМ, ЭТО КОНТАКТ? (В ATTACHMENTS) =====
+            JsonNode attachmentsNode = bodyNode.path("attachments");
+            String vcf = null;
+
+            if (attachmentsNode.isArray() && attachmentsNode.size() > 0) {
+                for (JsonNode attachment : attachmentsNode) {
+                    String type = attachment.path("type").asText();
+                    if ("contact".equals(type)) {
+                        JsonNode payload = attachment.path("payload");
+                        vcf = payload.path("vcf_info").asText(null);
+                        if (vcf != null) {
+                            log.info("📱 Найден контакт в attachments");
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (vcf != null) {
+                log.info("📱 Получен контакт от пользователя {}", userId);
+                handleContactFromMax(Long.parseLong(userId), vcf);
+                return "OK";
+            }
+
             // ===== СОХРАНЯЕМ CHAT_ID В БАЗУ =====
             try {
                 User user = userService.findByTelegramId(Long.parseLong(userId)).orElse(null);
@@ -234,6 +258,7 @@ public class MaxWebhookHandler {
             );
 
             // ===== КНОПКИ =====
+
             if (response.getButtons() != null && !response.getButtons().isEmpty()) {
                 log.info("🔘 Добавляем {} кнопок", response.getButtons().size());
 
@@ -336,5 +361,74 @@ public class MaxWebhookHandler {
             }
         }
     }
+    public void handleContactFromMax(Long userId, String contactVcf) {
+        log.info("📱 ===== ОБРАБОТКА КОНТАКТА =====");
+        log.info("📱 userId: " + userId);
+        log.info("📱 contactVcf: " + contactVcf);
 
+        try {
+            String phone = extractPhoneFromVcf(contactVcf);
+            if (phone == null) {
+                log.info("❌ Не удалось извлечь телефон из контакта");
+                return;
+            }
+
+            log.info("📱 Извлечен телефон: " + phone);
+
+            String purpose = stateService.getTempPurpose(userId);
+            log.info("📱 purpose: " + purpose);
+
+            Elder tempElder = stateService.getTempElder(userId);
+
+            stateService.clearTempPurpose(userId);
+
+            if ("elder_phone".equals(purpose) && tempElder != null) {
+                tempElder.setClientPhone(phone);
+                stateService.setState(userId, DialogState.AWAITING_ELDER_REQUIREMENTS);
+
+                UniversalResponse response = new UniversalResponse(
+                        "✅ Номер телефона получен!\n\n" +
+                                "📝 Теперь введите особые пожелания (например: первый этаж, диетическое питание):"
+                );
+                response.addButton("❌ Отменить", "cancel_action");
+                sendResponse(userId, response);
+            } else {
+                log.info("⚠️ Нет активной сессии для пользователя " + userId);
+            }
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка обработки контакта: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    private String extractPhoneFromVcf(String vcf) {
+        if (vcf == null || vcf.isEmpty()) return null;
+
+        try {
+            String[] lines = vcf.split("\n");
+            for (String line : lines) {
+                String trimmedLine = line.trim();
+                if (trimmedLine.toUpperCase().startsWith("TEL")) {
+                    int colonIndex = trimmedLine.indexOf(':');
+                    if (colonIndex != -1) {
+                        String phone = trimmedLine.substring(colonIndex + 1).trim();
+                        phone = phone.replaceAll("[^0-9+]", "");
+                        if (phone.length() >= 10) {
+                            return phone;
+                        }
+                    }
+                }
+            }
+
+            String phone = vcf.replaceAll("[^0-9+]", "");
+            if (phone.length() >= 10) {
+                return phone;
+            }
+            return null;
+
+        } catch (Exception e) {
+            System.err.println("❌ Ошибка извлечения телефона из VCF: " + e.getMessage());
+            return null;
+        }
+    }
 }

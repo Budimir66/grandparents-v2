@@ -81,6 +81,7 @@ public class UserStateService {
         editingCareHomeId.remove(userId);
         tempOperatorPhone.remove(userId);
         tempCareHomeWebsite.remove(userId);
+        tempPurpose.remove(userId);
 
     }
 
@@ -257,5 +258,19 @@ public class UserStateService {
 
     public void clearFilterTodayOnly(Long userId) {
         filterTodayOnly.remove(userId);
+    }
+    // ===== ВРЕМЕННЫЕ ДАННЫЕ ДЛЯ КОНТАКТОВ =====
+    private final Map<Long, String> tempPurpose = new ConcurrentHashMap<>();
+
+    public void setTempPurpose(Long userId, String purpose) {
+        tempPurpose.put(userId, purpose);
+    }
+
+    public String getTempPurpose(Long userId) {
+        return tempPurpose.get(userId);
+    }
+
+    public void clearTempPurpose(Long userId) {
+        tempPurpose.remove(userId);
     }
 }

@@ -394,6 +394,23 @@ public class BotService {
             return showHelp(userId);
         }
 
+        if (callbackData.equals("request_contact_from_max")) {
+            return handleRequestContactFromMax(userId);
+        }
+
+        // ===== ВВОД ТЕЛЕФОНА ВРУЧНУЮ =====
+        if (callbackData.equals("enter_phone_manually")) {
+            stateService.setState(userId, DialogState.AWAITING_ELDER_PHONE_MANUAL);
+            UniversalResponse response = new UniversalResponse(
+                    "📱 Введите номер телефона в формате:\n\n" +
+                            "+7 999 123-45-67\n" +
+                            "или просто 89991234567\n\n" +
+                            "Для отмены нажмите кнопку ниже."
+            );
+            response.addButton("❌ Отменить", "cancel_action");
+            return response;
+        }
+
         // ===== ЗАЯВКИ ОПЕРАТОРА (ВСЕ ТИПЫ) =====
         if (callbackData.startsWith("operator_requests_created_") ||
                 callbackData.startsWith("operator_requests_in_progress_") ||
@@ -3602,6 +3619,17 @@ public class BotService {
 
         response.addButtonFullRow("🔙 Назад", "operator_requests_" + operatorId);
         response.addButtonFullRow("📋 Список операторов", "manager_operators");
+        return response;
+    }
+    private UniversalResponse handleRequestContactFromMax(Long userId) {
+        stateService.setTempPurpose(userId, "elder_phone");
+        stateService.setState(userId, DialogState.AWAITING_CONTACT_FROM_MAX);
+
+        UniversalResponse response = new UniversalResponse(
+                "📱 Нажмите кнопку ниже, чтобы отправить ваш номер телефона:"
+        );
+        response.addContactRequestButton("📱 Отправить номер");
+        response.addButton("❌ Отменить", "cancel_action");
         return response;
     }
 }

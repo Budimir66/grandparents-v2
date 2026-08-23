@@ -6,7 +6,9 @@ import org.grandparents.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class UserService {
@@ -62,5 +64,17 @@ public class UserService {
     public List<User> findByCareHomeIdAndAccessLevel(Long careHomeId, AccessLevel accessLevel) {
         return userRepository.findByCareHomeIdAndAccessLevel(careHomeId, accessLevel);
     }
+    private final Map<Long, String> tempPurpose = new ConcurrentHashMap<>();
 
+    public void setTempPurpose(Long userId, String purpose) {
+        tempPurpose.put(userId, purpose);
+    }
+
+    public String getTempPurpose(Long userId) {
+        return tempPurpose.get(userId);
+    }
+
+    public void clearTempPurpose(Long userId) {
+        tempPurpose.remove(userId);
+    }
 }

@@ -123,5 +123,11 @@ public class UniversalResponse {
         button.setFullRow(true);
         this.buttons.add(button);
     }
-
+    public void addContactRequestButton(String text) {
+        Button button = new Button();
+        button.setText(text);
+        button.setType("request_contact");
+        button.setFullRow(true);
+        this.buttons.add(button);
+    }
 }
