@@ -400,9 +400,9 @@ public class BotService {
                 callbackData.startsWith("operator_requests_interested_") ||
                 callbackData.startsWith("operator_requests_completed_")) {
 
-            // Извлекаем operatorId из callbackData
-            String prefix = callbackData.substring(0, callbackData.lastIndexOf("_"));
-            String operatorIdStr = callbackData.substring(prefix.lastIndexOf("_") + 1);
+            // Извлекаем operatorId из конца строки
+            String[] parts = callbackData.split("_");
+            String operatorIdStr = parts[parts.length - 1]; // последняя часть — это ID
             Long operatorId = Long.parseLong(operatorIdStr);
 
             String type;
@@ -416,7 +416,6 @@ public class BotService {
                 type = "completed";
             }
 
-            // Показываем заявки оператора по выбранному типу
             return showOperatorRequestsByType(userId, operatorId, type);
         }
 
