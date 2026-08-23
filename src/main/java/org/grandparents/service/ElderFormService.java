@@ -244,22 +244,21 @@ public class ElderFormService {
                 tempElder.setExpiresAt(LocalDateTime.now().plusDays(14));
 
                 User user = getUserOrNull(userId);
+
+                // ===== ОПРЕДЕЛЯЕМ СТАТУС =====
                 if (user != null && isGuest(user)) {
                     tempElder.setStatus(ElderStatus.PENDING);
                 } else if (user != null && isOperator(user)) {
-                    // ===== ОПЕРАТОР СОЗДАЁТ ЗАЯВКУ =====
                     tempElder.setCreatedBy(userId);
                     tempElder.setCareHomeId(user.getCareHomeId());
-                    tempElder.setAssignedOperatorId(userId);  // ← оператор сразу берёт в работу
+                    tempElder.setAssignedOperatorId(userId);
                     tempElder.setStatus(ElderStatus.IN_PROGRESS);
                     tempElder.setTakenAt(LocalDateTime.now());
                 } else if (user != null && isManager(user)) {
-                    // ===== МЕНЕДЖЕР СОЗДАЁТ ЗАЯВКУ =====
                     tempElder.setCreatedBy(userId);
                     tempElder.setCareHomeId(user.getCareHomeId());
                     tempElder.setStatus(ElderStatus.NEW);
                 } else if (user != null && isAdmin(user)) {
-                    // ===== АДМИНИСТРАТОР СОЗДАЁТ ЗАЯВКУ =====
                     tempElder.setCreatedBy(userId);
                     tempElder.setStatus(ElderStatus.NEW);
                 } else {
@@ -268,6 +267,15 @@ public class ElderFormService {
 
                 elderService.createElder(tempElder);
                 stateService.clearState(userId);
+
+                // ============================================================
+                // ===== РАССЫЛКА ОПЕРАТОРАМ (ЕСЛИ ЗАЯВКА НОВАЯ) =====
+                // ============================================================
+                if (tempElder.getStatus() == ElderStatus.NEW ||
+                        tempElder.getStatus() == ElderStatus.OFFERED) {
+                    notificationService.notifyOperators(tempElder);
+                    log.info("📢 Рассылка операторам отправлена для заявки #{}", tempElder.getId());
+                }
 
                 // ===== ОТВЕТ =====
                 if (user != null && isGuest(user)) {
