@@ -394,6 +394,32 @@ public class BotService {
             return showHelp(userId);
         }
 
+        // ===== ЗАЯВКИ ОПЕРАТОРА (ВСЕ ТИПЫ) =====
+        if (callbackData.startsWith("operator_requests_created_") ||
+                callbackData.startsWith("operator_requests_in_progress_") ||
+                callbackData.startsWith("operator_requests_interested_") ||
+                callbackData.startsWith("operator_requests_completed_")) {
+
+            // Извлекаем operatorId из callbackData
+            String prefix = callbackData.substring(0, callbackData.lastIndexOf("_"));
+            String operatorIdStr = callbackData.substring(prefix.lastIndexOf("_") + 1);
+            Long operatorId = Long.parseLong(operatorIdStr);
+
+            String type;
+            if (callbackData.startsWith("operator_requests_created_")) {
+                type = "created";
+            } else if (callbackData.startsWith("operator_requests_in_progress_")) {
+                type = "in_progress";
+            } else if (callbackData.startsWith("operator_requests_interested_")) {
+                type = "interested";
+            } else {
+                type = "completed";
+            }
+
+            // Показываем заявки оператора по выбранному типу
+            return showOperatorRequestsByType(userId, operatorId, type);
+        }
+
         // ===== БЛОКИРОВКА ОПЕРАТОРА =====
         if (callbackData.startsWith("block_operator_")) {
             String operatorIdStr = callbackData.substring("block_operator_".length());
@@ -3495,21 +3521,75 @@ public class BotService {
             return responseWithMainMenu("❌ Оператор не найден.");
         }
 
-        // Находим заявки, которые взял оператор
-        List<Elder> elders = elderService.findByAssignedOperatorId(operator.getTelegramId());
+        // ===== ПОКАЗЫВАЕМ МЕНЮ ЗАЯВОК ОПЕРАТОРА =====
+        UniversalResponse response = new UniversalResponse(
+                "📋 **Заявки оператора " + operator.getFirstName() + "**\n\n" +
+                        "Выберите раздел:"
+        );
+        response.addButtonFullRow("📤 Переданные заявки", "operator_requests_created_" + operatorId);
+        response.addButtonFullRow("📋 В работе", "operator_requests_in_progress_" + operatorId);
+        response.addButtonFullRow("⭐ Интересные", "operator_requests_interested_" + operatorId);
+        response.addButtonFullRow("✅ Завершённые", "operator_requests_completed_" + operatorId);
+        response.addButtonFullRow("🔙 Назад к оператору", "view_operator_" + operatorId);
+        response.addButtonFullRow("📋 Список операторов", "manager_operators");
+        return response;
+    }
+    private UniversalResponse showOperatorRequestsByType(Long directorId, Long operatorId, String type) {
+        User director = getUserOrNull(directorId);
+        if (director == null || director.getAccessLevel() != AccessLevel.MANAGER) {
+            return responseWithMainMenu("❌ Только директор может просматривать заявки операторов.");
+        }
+
+        User operator = userService.findById(operatorId);
+        if (operator == null) {
+            return responseWithMainMenu("❌ Оператор не найден.");
+        }
+
+        // ===== ПОЛУЧАЕМ ЗАЯВКИ ОПЕРАТОРА ПО ТИПУ =====
+        List<Elder> elders = new ArrayList<>();
+        String title = "";
+
+        switch (type) {
+            case "created" -> {
+                elders = elderService.findByCreatedBy(operator.getTelegramId());
+                title = "📤 **Переданные заявки оператора " + operator.getFirstName() + "**";
+            }
+            case "in_progress" -> {
+                elders = elderService.findByAssignedOperatorId(operator.getTelegramId());
+                elders = elders.stream()
+                        .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS || e.getStatus() == ElderStatus.ACCEPTED)
+                        .collect(Collectors.toList());
+                title = "📋 **Заявки в работе у оператора " + operator.getFirstName() + "**";
+            }
+            case "interested" -> {
+                List<OperatorReaction> reactions = reactionRepository
+                        .findByOperatorIdAndReaction(operator.getTelegramId(), "INTERESTED");
+                for (OperatorReaction reaction : reactions) {
+                    Elder elder = elderService.findById(reaction.getElderId());
+                    if (elder != null) {
+                        elders.add(elder);
+                    }
+                }
+                title = "⭐ **Интересные заявки оператора " + operator.getFirstName() + "**";
+            }
+            case "completed" -> {
+                elders = elderService.findByCompletedBy(operator.getTelegramId());
+                title = "✅ **Завершённые заявки оператора " + operator.getFirstName() + "**";
+            }
+            default -> {
+                return responseWithMainMenu("❌ Неизвестный раздел.");
+            }
+        }
 
         if (elders.isEmpty()) {
-            UniversalResponse response = new UniversalResponse(
-                    "📋 **Заявки оператора " + operator.getFirstName() + "**\n\n" +
-                            "📭 У оператора пока нет заявок."
-            );
-            response.addButtonFullRow("🔙 Назад к оператору", "view_operator_" + operatorId);
+            UniversalResponse response = new UniversalResponse(title + "\n\n📭 У оператора пока нет таких заявок.");
+            response.addButtonFullRow("🔙 Назад", "operator_requests_" + operatorId);
             response.addButtonFullRow("📋 Список операторов", "manager_operators");
             return response;
         }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("📋 **Заявки оператора ").append(operator.getFirstName()).append("**\n\n");
+        sb.append(title).append("\n\n");
         sb.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
         sb.append("📌 Всего заявок: ").append(elders.size()).append("\n");
         sb.append("━━━━━━━━━━━━━━━━━━━━━━━\n\n");
@@ -3522,7 +3602,7 @@ public class BotService {
             response.addButtonFullRow(buttonText, "view_elder_" + elder.getId());
         }
 
-        response.addButtonFullRow("🔙 Назад к оператору", "view_operator_" + operatorId);
+        response.addButtonFullRow("🔙 Назад", "operator_requests_" + operatorId);
         response.addButtonFullRow("📋 Список операторов", "manager_operators");
         return response;
     }
