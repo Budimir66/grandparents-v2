@@ -24,9 +24,6 @@ public class UserStateService {
     private final Map<Long, DialogState> states = new ConcurrentHashMap<>();
     private final Map<Long, Elder> tempElders = new ConcurrentHashMap<>();
 
-    // ===== ID ПОСЛЕДНЕГО СООБЩЕНИЯ БОТА =====
-    private final Map<Long, String> lastBotMessageId = new ConcurrentHashMap<>();
-
     private final Map<Long, String> tempCareHomeDescription = new ConcurrentHashMap<>();
     private final Map<Long, String> tempCareHomeSpecialization = new ConcurrentHashMap<>();
     private final Map<Long, Double> tempCareHomePrice = new ConcurrentHashMap<>();  // ← ОДНО ОБЪЯВЛЕНИЕ
@@ -62,13 +59,6 @@ public class UserStateService {
     public int getCurrentPage(Long userId) {
         return currentPage.getOrDefault(userId, 0);
     }
-    public void setLastBotMessageId(Long userId, String messageId) {
-        lastBotMessageId.put(userId, messageId);
-    }
-
-    public String getLastBotMessageId(Long userId) {
-        return lastBotMessageId.get(userId);
-    }
 
 
     public DialogState getState(Long userId) {
@@ -91,7 +81,6 @@ public class UserStateService {
         editingCareHomeId.remove(userId);
         tempOperatorPhone.remove(userId);
         tempCareHomeWebsite.remove(userId);
-        lastBotMessageId.remove(userId);
 
     }
 
@@ -217,9 +206,6 @@ public class UserStateService {
 
     public void clearEditingBonusKey(Long userId) {
         editingBonusKey.remove(userId);
-    }
-    public void clearLastBotMessageId(Long userId) {
-        lastBotMessageId.remove(userId);
     }
     // ===== ПАГИНАЦИЯ =====
     private final Map<Long, List<Elder>> searchResults = new ConcurrentHashMap<>();

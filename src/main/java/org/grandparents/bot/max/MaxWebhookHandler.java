@@ -133,13 +133,6 @@ public class MaxWebhookHandler {
                 log.info("📥 [CALLBACK] callbackData: " + callbackData);
                 log.info("📥 [CALLBACK] messageId: " + messageId);
 
-                // ===== СОХРАНЯЕМ ID СООБЩЕНИЯ =====
-                if (userId != null && messageId != null) {
-                    Long userIdLong = Long.parseLong(userId);
-                    // Сохраняем ID входящего сообщения (от пользователя)
-                    // Позже будем использовать для удаления ответа бота
-                    stateService.setLastBotMessageId(userIdLong, messageId);
-                }
 
                 if (callbackData == null || userId == null) {
                     log.info("⚠️ Нет callback данных или userId");
@@ -177,12 +170,6 @@ public class MaxWebhookHandler {
             log.info("📥 [MESSAGE] chatId: " + chatId);
             log.info("📥 [MESSAGE] text: " + text);
             log.info("📥 [MESSAGE] messageId: " + messageId);
-
-            // ===== СОХРАНЯЕМ ID СООБЩЕНИЯ =====
-            if (userId != null && messageId != null) {
-                Long userIdLong = Long.parseLong(userId);
-                stateService.setLastBotMessageId(userIdLong, messageId);
-            }
 
             log.info("📥 [MESSAGE] userId: " + userId);
             log.info("📥 [MESSAGE] chatId: " + chatId);
