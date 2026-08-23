@@ -44,7 +44,12 @@ public class ElderFormService {
      */
     public UniversalResponse startNewRequest(Long userId) {
         User user = getUserOrNull(userId);
-        if (user != null && isGuest(user)) {
+        if (user == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
+        // ===== ПРОВЕРКА НА АКТИВНУЮ ЗАЯВКУ (для GUEST) =====
+        if (isGuest(user)) {
             List<Elder> existingElders = elderService.findByClientTelegramId(userId);
             boolean hasActive = existingElders.stream()
                     .anyMatch(e -> e.getStatus() != ElderStatus.COMPLETED &&
@@ -68,30 +73,55 @@ public class ElderFormService {
         tempElder.setConsentGiven(false);
         stateService.setTempElder(userId, tempElder);
 
-        // ===== ПОКАЗЫВАЕМ ОФЕРТУ В САМОМ НАЧАЛЕ =====
-        stateService.setState(userId, DialogState.AWAITING_CONSENT_BEFORE_FORM);
+        // ===== ЕСЛИ КЛИЕНТ (GUEST) — ПОКАЗЫВАЕМ ОФЕРТУ =====
+        if (isGuest(user)) {
+            stateService.setState(userId, DialogState.AWAITING_CONSENT_BEFORE_FORM);
 
-        String consentText = """
-            📋 **СОГЛАСИЕ НА ОБРАБОТКУ ПЕРСОНАЛЬНЫХ ДАННЫХ**
+            String consentText = """
+                📋 **СОГЛАСИЕ НА ОБРАБОТКУ ПЕРСОНАЛЬНЫХ ДАННЫХ**
+                и получение информационных сообщений
 
-            Для создания заявки необходимо ваше согласие на обработку персональных данных
-            и получение сообщений от операторов пансионатов.
+                Для создания заявки необходимо ваше согласие на обработку персональных данных
+                и получение сообщений от операторов пансионатов.
 
-            1. Я даю своё согласие на обработку моих персональных данных
-            и данных моего подопечного.
+                1. Я даю своё согласие на обработку моих персональных данных
+                и данных моего подопечного в соответствии с Федеральным законом № 152-ФЗ
+                «О персональных данных».
 
-            2. Я соглашаюсь, что мои контактные данные и информация о моём подопечном
-            будут переданы операторам пансионатов для поиска подходящего места проживания.
+                2. Я соглашаюсь, что мои контактные данные (имя, телефон, адрес электронной почты)
+                и информация о моём подопечном (имя, возраст, состояние здоровья, бюджет, локация, пожелания)
+                будут переданы операторам пансионатов для поиска подходящего места проживания.
 
-            3. Я даю своё согласие на получение сообщений от операторов пансионатов.
+                3. Я даю своё согласие на получение сообщений от операторов пансионатов.
 
-            Нажимая "✅ Согласен", я принимаю условия.
+                4. Я понимаю, что могу в любое время отозвать своё согласие,
+                написав в поддержку бота или отправив запрос на отписку.
 
-            ❌ Не согласен — заявка не будет создана.""";
+                5. Я подтверждаю, что ознакомлен(а) с условиями и принимаю их.
 
-        UniversalResponse response = new UniversalResponse(consentText);
-        response.addButtonFullRow("✅ Согласен", "accept_consent_before_form");
-        response.addButtonFullRow("❌ Не согласен", "decline_consent_before_form");
+                Нажимая "✅ Согласен", я принимаю все условия.
+
+                ❌ Не согласен — заявка не будет создана.""";
+
+            UniversalResponse response = new UniversalResponse(consentText);
+            response.addButtonFullRow("✅ Согласен", "accept_consent_before_form");
+            response.addButtonFullRow("❌ Не согласен", "decline_consent_before_form");
+            return response;
+        }
+
+        // ===== ДЛЯ ОПЕРАТОРА, МЕНЕДЖЕРА, АДМИНИСТРАТОРА — СРАЗУ АНКЕТА =====
+        // Согласие считается автоматически принятым
+        tempElder.setConsentGiven(true);
+        tempElder.setConsentGivenAt(LocalDateTime.now());
+        stateService.setTempElder(userId, tempElder);
+        stateService.setState(userId, DialogState.AWAITING_ELDER_NAME);
+
+        UniversalResponse response = new UniversalResponse(
+                "📝 **Создание заявки**\n\n" +
+                        "✅ Согласие на обработку данных принято автоматически.\n\n" +
+                        "Введите полное имя подопечного (например: Иванова Анна Петровна):"
+        );
+        response.addButton("❌ Отменить", "cancel_action");
         return response;
     }
 
