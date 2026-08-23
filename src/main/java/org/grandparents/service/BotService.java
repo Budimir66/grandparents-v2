@@ -398,6 +398,18 @@ public class BotService {
             return handleRequestContactFromMax(userId);
         }
 
+        // ===== УДАЛЕНИЕ АККАУНТА ОПЕРАТОРА =====
+        if (callbackData.equals("delete_my_account")) {
+            return confirmDeleteOperatorProfile(userId);
+        }
+
+// ===== ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ =====
+        if (callbackData.startsWith("confirm_delete_account_")) {
+            String action = callbackData.substring("confirm_delete_account_".length());
+            boolean confirm = "yes".equals(action);
+            return deleteOperatorProfile(userId, confirm);
+        }
+
         // ===== ВВОД ТЕЛЕФОНА ВРУЧНУЮ =====
         if (callbackData.equals("enter_phone_manually")) {
             stateService.setState(userId, DialogState.AWAITING_ELDER_PHONE_MANUAL);
@@ -3177,6 +3189,7 @@ public class BotService {
 
         // ===== КНОПКИ РЕДАКТИРОВАНИЯ =====
         response.addButtonFullRow("✏️ Редактировать профиль", "edit_profile");
+        response.addButtonFullRow("🗑️ Удалить аккаунт", "delete_my_account");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
 
         return response;
@@ -3630,6 +3643,73 @@ public class BotService {
         );
         response.addContactRequestButton("📱 Отправить номер");
         response.addButton("❌ Отменить", "cancel_action");
+        return response;
+    }
+    private UniversalResponse confirmDeleteOperatorProfile(Long userId) {
+        User user = getUserOrNull(userId);
+        if (user == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
+        if (!isOperator(user)) {
+            return responseWithMainMenu("❌ Доступно только для операторов.");
+        }
+
+        UniversalResponse response = new UniversalResponse(
+                "⚠️ **Вы уверены, что хотите удалить свой аккаунт?**\n\n" +
+                        "👤 Имя: " + user.getFirstName() + "\n" +
+                        "🏢 Пансионат: " + getCareHomeName(user.getCareHomeId()) + "\n" +
+                        "💰 Баллов: " + user.getBonusPoints() + "\n\n" +
+                        "❗ Это действие нельзя отменить!\n\n" +
+                        "Все ваши заявки и статистика будут удалены."
+        );
+        response.addButtonFullRow("✅ Да, удалить", "confirm_delete_account_yes");
+        response.addButtonFullRow("❌ Отменить", "confirm_delete_account_no");
+        return response;
+    }
+    private UniversalResponse deleteOperatorProfile(Long userId, boolean confirm) {
+        if (!confirm) {
+            return responseWithMainMenu("❌ Удаление отменено.");
+        }
+
+        User user = getUserOrNull(userId);
+        if (user == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
+        if (!isOperator(user)) {
+            return responseWithMainMenu("❌ Доступно только для операторов.");
+        }
+
+        // ===== ПРОВЕРЯЕМ, ЕСТЬ ЛИ У ОПЕРАТОРА АКТИВНЫЕ ЗАЯВКИ =====
+        List<Elder> activeElders = elderService.findByAssignedOperatorId(user.getTelegramId());
+        long inProgress = activeElders.stream()
+                .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS)
+                .count();
+
+        if (inProgress > 0) {
+            UniversalResponse response = new UniversalResponse(
+                    "❌ **Нельзя удалить аккаунт!**\n\n" +
+                            "У вас есть активные заявки в работе (" + inProgress + " шт.).\n\n" +
+                            "Сначала завершите или передайте заявки."
+            );
+            response.addButtonFullRow("📋 Мои заявки", "my_requests");
+            response.addButtonFullRow("🏠 Главное меню", "main_menu");
+            return response;
+        }
+
+        // ===== УДАЛЯЕМ ПОЛЬЗОВАТЕЛЯ =====
+        String userName = user.getFirstName();
+        userService.deleteUser(user.getId());
+
+        log.info("🗑️ Оператор {} (ID: {}) удалил свой аккаунт", userName, userId);
+
+        UniversalResponse response = new UniversalResponse(
+                "✅ Ваш аккаунт успешно удалён.\n\n" +
+                        "🙏 Спасибо за работу!\n\n" +
+                        "Вы всегда можете зарегистрироваться снова."
+        );
+        response.addButtonFullRow("📝 Создать заявку", "new_request");
         return response;
     }
 }
