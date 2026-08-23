@@ -118,7 +118,7 @@ public class ElderFormService {
 
         UniversalResponse response = new UniversalResponse(
                 "📝 **Создание заявки**\n\n" +
-                        "✅ Согласие на обработку данных принято автоматически.\n\n" +
+                        "✅ Вводите данные в окне чата бота.\n\n" +
                         "Введите полное имя подопечного (например: Иванова Анна Петровна):"
         );
         response.addButton("❌ Отменить", "cancel_action");
@@ -141,11 +141,18 @@ public class ElderFormService {
 
         switch (state) {
             case AWAITING_ELDER_NAME -> {
-                // Ограничение: 100 символов
                 tempElder.setFullName(truncateText(text, 100));
                 stateService.setState(userId, DialogState.AWAITING_CLIENT_NAME);
-                response.setText("👤 Как к вам обращаться? (до 100 символов):\n" +
-                        "Например: Иван Петрович");
+
+                User user = getUserOrNull(userId);
+                String clientNamePrompt;
+                if (user != null && isGuest(user)) {
+                    clientNamePrompt = "👤 Как к вам обращаться? (до 100 символов):\nНапример: Иван Петрович";
+                } else {
+                    clientNamePrompt = "👤 Имя клиента (до 100 символов):\nНапример: Анна Ивановна";
+                }
+
+                response.setText(clientNamePrompt);
                 response.addButton("❌ Отменить", "cancel_action");
             }
 
@@ -236,29 +243,29 @@ public class ElderFormService {
                 tempElder.setClientTelegramId(userId);
                 tempElder.setExpiresAt(LocalDateTime.now().plusDays(14));
 
-                // ===== ПРОВЕРЯЕМ, ЧТО СОГЛАСИЕ БЫЛО ДАНО =====
-                if (tempElder.getConsentGiven() == null || !tempElder.getConsentGiven()) {
-                    response.setText("❌ Согласие на обработку данных не было получено.\n\n" +
-                            "Пожалуйста, начните создание заявки заново.");
-                    response.addButton("📝 Создать заявку", "new_request");
-                    response.addButton("🏠 Главное меню", "main_menu");
-                    stateService.clearState(userId);
-                    return response;
-                }
-
-                // ===== ОПРЕДЕЛЯЕМ СТАТУС =====
                 User user = getUserOrNull(userId);
                 if (user != null && isGuest(user)) {
                     tempElder.setStatus(ElderStatus.PENDING);
                 } else if (user != null && isOperator(user)) {
+                    // ===== ОПЕРАТОР СОЗДАЁТ ЗАЯВКУ =====
                     tempElder.setCreatedBy(userId);
                     tempElder.setCareHomeId(user.getCareHomeId());
-                    tempElder.setStatus(ElderStatus.OFFERED);
+                    tempElder.setAssignedOperatorId(userId);  // ← оператор сразу берёт в работу
+                    tempElder.setStatus(ElderStatus.IN_PROGRESS);
+                    tempElder.setTakenAt(LocalDateTime.now());
+                } else if (user != null && isManager(user)) {
+                    // ===== МЕНЕДЖЕР СОЗДАЁТ ЗАЯВКУ =====
+                    tempElder.setCreatedBy(userId);
+                    tempElder.setCareHomeId(user.getCareHomeId());
+                    tempElder.setStatus(ElderStatus.NEW);
+                } else if (user != null && isAdmin(user)) {
+                    // ===== АДМИНИСТРАТОР СОЗДАЁТ ЗАЯВКУ =====
+                    tempElder.setCreatedBy(userId);
+                    tempElder.setStatus(ElderStatus.NEW);
                 } else {
                     tempElder.setStatus(ElderStatus.NEW);
                 }
 
-                // ===== СОХРАНЯЕМ ЗАЯВКУ =====
                 elderService.createElder(tempElder);
                 stateService.clearState(userId);
 
@@ -634,5 +641,11 @@ public class ElderFormService {
         if (text == null) return null;
         if (text.length() <= maxLength) return text;
         return text.substring(0, maxLength);
+    }
+    private boolean isManager(User user) {
+        return user != null && user.getAccessLevel() == AccessLevel.MANAGER;
+    }
+    private boolean isAdmin(User user) {
+        return user != null && user.getAccessLevel() == AccessLevel.ADMIN;
     }
 }
