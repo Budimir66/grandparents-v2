@@ -410,10 +410,6 @@ public class ElderFormService {
             return responseWithMainMenu("❌ Вы не можете редактировать эту заявку.");
         }
 
-        if (elder.getAssignedOperatorId() != null) {
-            return responseWithMainMenu("❌ Заявка уже взята в работу и не может быть отредактирована.");
-        }
-
         if (elder.getStatus() == ElderStatus.COMPLETED ||
                 elder.getStatus() == ElderStatus.EXPIRED ||
                 elder.getStatus() == ElderStatus.DELETED) {
@@ -448,10 +444,6 @@ public class ElderFormService {
 
         if (!elder.getClientTelegramId().equals(userId)) {
             return responseWithBackAndMainMenu("❌ Это не ваша заявка.", "my_requests");
-        }
-
-        if (elder.getAssignedOperatorId() != null) {
-            return responseWithMainMenu("❌ Заявка уже взята в работу и не может быть удалена.");
         }
 
         stateService.setTempElder(userId, elder);

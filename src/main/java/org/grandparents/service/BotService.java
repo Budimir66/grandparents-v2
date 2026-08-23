@@ -2848,8 +2848,7 @@ public class BotService {
         if (elder.getAssignedOperatorId() == null &&
                 elder.getStatus() != ElderStatus.COMPLETED &&
                 elder.getStatus() != ElderStatus.EXPIRED &&
-                elder.getStatus() != ElderStatus.DELETED &&
-                elder.getStatus() != ElderStatus.PENDING) {
+                elder.getStatus() != ElderStatus.DELETED) {
             response.addButton("✏️ Редактировать", "edit_elder_" + elder.getId());
             response.addButton("🗑️ Удалить", "delete_elder_" + elder.getId());
         }
