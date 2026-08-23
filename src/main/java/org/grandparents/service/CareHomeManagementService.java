@@ -967,12 +967,12 @@ public class CareHomeManagementService {
         // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ПРИНАДЛЕЖИТ ЭТОМУ ПАНСИОНАТУ =====
         boolean isOperatorBelongsToManager = false;
         if (operator.getCareHomeId() != null) {
-            // Если директор — ADMIN, то видит всех
+            // Для ADMIN — видит всех
             if (user.getAccessLevel() == AccessLevel.ADMIN) {
                 isOperatorBelongsToManager = true;
             } else {
-                // Для MANAGER — проверяем, что оператор в его пансионате
-                List<CareHome> directorCareHomes = careHomeService.findByProposedBy(userId);
+                // Для MANAGER — используем user.getId(), а не userId!
+                List<CareHome> directorCareHomes = careHomeService.findByProposedBy(user.getId());
                 isOperatorBelongsToManager = directorCareHomes.stream()
                         .anyMatch(ch -> ch.getId().equals(operator.getCareHomeId()));
             }
