@@ -378,6 +378,27 @@ public class BotService {
             return showHelp(userId);
         }
 
+        // ===== БЛОКИРОВКА ОПЕРАТОРА =====
+        if (callbackData.startsWith("block_operator_")) {
+            String operatorIdStr = callbackData.substring("block_operator_".length());
+            Long operatorId = Long.parseLong(operatorIdStr);
+            return handleBlockOperator(userId, operatorId);
+        }
+
+// ===== РАЗБЛОКИРОВКА ОПЕРАТОРА =====
+        if (callbackData.startsWith("unblock_operator_")) {
+            String operatorIdStr = callbackData.substring("unblock_operator_".length());
+            Long operatorId = Long.parseLong(operatorIdStr);
+            return handleUnblockOperator(userId, operatorId);
+        }
+
+// ===== ЗАЯВКИ ОПЕРАТОРА =====
+        if (callbackData.startsWith("operator_requests_")) {
+            String operatorIdStr = callbackData.substring("operator_requests_".length());
+            Long operatorId = Long.parseLong(operatorIdStr);
+            return showOperatorRequests(userId, operatorId);
+        }
+
         // ===== ПРОПУСК ШАГОВ АНКЕТЫ =====
         if (callbackData.startsWith("skip_profile_")) {
             DialogState currentState = stateService.getState(userId);
@@ -3408,5 +3429,85 @@ public class BotService {
                 "✅ Приглашение для пансионата **" + careHome.getName() + "** удалено.\n\n" +
                         "📌 Уже зарегистрированные операторы продолжают работать."
         );
+    }
+    private UniversalResponse handleBlockOperator(Long userId, Long operatorId) {
+        User user = getUserOrNull(userId);
+        if (user == null || user.getAccessLevel() != AccessLevel.MANAGER) {
+            return responseWithMainMenu("❌ Только директор может блокировать операторов.");
+        }
+
+        User operator = userService.findById(operatorId);
+        if (operator == null) {
+            return responseWithMainMenu("❌ Оператор не найден.");
+        }
+
+        operator.setIsActive(false);
+        operator.setIsBlocked(true);
+        operator.setBlockedAt(LocalDateTime.now());
+        operator.setBlockedReason("Заблокирован директором");
+        userService.saveUser(operator);
+
+        return responseWithMainMenu("🔒 Оператор **" + operator.getFirstName() + "** заблокирован.");
+    }
+    private UniversalResponse handleUnblockOperator(Long userId, Long operatorId) {
+        User user = getUserOrNull(userId);
+        if (user == null || user.getAccessLevel() != AccessLevel.MANAGER) {
+            return responseWithMainMenu("❌ Только директор может разблокировать операторов.");
+        }
+
+        User operator = userService.findById(operatorId);
+        if (operator == null) {
+            return responseWithMainMenu("❌ Оператор не найден.");
+        }
+
+        operator.setIsActive(true);
+        operator.setIsBlocked(false);
+        operator.setBlockedAt(null);
+        operator.setBlockedReason(null);
+        userService.saveUser(operator);
+
+        return responseWithMainMenu("🔓 Оператор **" + operator.getFirstName() + "** разблокирован.");
+    }
+    private UniversalResponse showOperatorRequests(Long userId, Long operatorId) {
+        User user = getUserOrNull(userId);
+        if (user == null || user.getAccessLevel() != AccessLevel.MANAGER) {
+            return responseWithMainMenu("❌ Только директор может просматривать заявки операторов.");
+        }
+
+        User operator = userService.findById(operatorId);
+        if (operator == null) {
+            return responseWithMainMenu("❌ Оператор не найден.");
+        }
+
+        // Находим заявки, которые взял оператор
+        List<Elder> elders = elderService.findByAssignedOperatorId(operator.getTelegramId());
+
+        if (elders.isEmpty()) {
+            UniversalResponse response = new UniversalResponse(
+                    "📋 **Заявки оператора " + operator.getFirstName() + "**\n\n" +
+                            "📭 У оператора пока нет заявок."
+            );
+            response.addButtonFullRow("🔙 Назад к оператору", "view_operator_" + operatorId);
+            response.addButtonFullRow("📋 Список операторов", "manager_operators");
+            return response;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("📋 **Заявки оператора ").append(operator.getFirstName()).append("**\n\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
+        sb.append("📌 Всего заявок: ").append(elders.size()).append("\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        UniversalResponse response = new UniversalResponse(sb.toString());
+
+        for (Elder elder : elders) {
+            String statusIcon = getStatusIcon(elder.getStatus());
+            String buttonText = elder.getFullName() + " (" + elder.getAge() + " лет) " + statusIcon;
+            response.addButtonFullRow(buttonText, "view_elder_" + elder.getId());
+        }
+
+        response.addButtonFullRow("🔙 Назад к оператору", "view_operator_" + operatorId);
+        response.addButtonFullRow("📋 Список операторов", "manager_operators");
+        return response;
     }
 }

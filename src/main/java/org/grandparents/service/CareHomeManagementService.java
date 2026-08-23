@@ -1016,6 +1016,16 @@ public class CareHomeManagementService {
         UniversalResponse response = new UniversalResponse(sb.toString());
 
         // ===== КНОПКИ =====
+// Блокировка/разблокировка
+        if (operator.getIsActive() != null && operator.getIsActive()) {
+            response.addButtonFullRow("🔒 Заблокировать", "block_operator_" + operator.getId());
+        } else {
+            response.addButtonFullRow("🔓 Разблокировать", "unblock_operator_" + operator.getId());
+        }
+
+// Заявки оператора
+        response.addButtonFullRow("📋 Заявки оператора", "operator_requests_" + operator.getId());
+
         response.addButtonFullRow("🗑️ Удалить", "confirm_delete_operator_" + operator.getId());
         response.addButtonFullRow("🔙 Назад", "manager_operators");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
