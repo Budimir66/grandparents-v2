@@ -56,6 +56,7 @@ public class ElderService {
     }
 
     public List<Elder> findActiveElders() {
+
         return elderRepository.findByStatusNotIn(List.of(
                 ElderStatus.COMPLETED,
                 ElderStatus.EXPIRED,

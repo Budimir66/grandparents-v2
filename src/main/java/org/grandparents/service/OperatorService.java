@@ -45,8 +45,9 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        if (elder.getAssignedOperatorId() != null) {
-            return responseWithMainMenu("❌ Эта заявка уже взята в работу другим оператором.");
+        // ===== ЗАЯВКУ НЕЛЬЗЯ ВЗЯТЬ ТОЛЬКО ЕСЛИ ОНА ЗАВЕРШЕНА =====
+        if (elder.getStatus() == ElderStatus.COMPLETED) {
+            return responseWithMainMenu("✅ Эта заявка уже завершена.");
         }
 
         User operator = getUserOrNull(userId);
@@ -58,42 +59,26 @@ public class OperatorService {
             return responseWithMainMenu("❌ Вы не можете взять в работу свою заявку.");
         }
 
+        // ===== БЕРЁМ ЗАЯВКУ В РАБОТУ (ДАЖЕ ЕСЛИ ОНА УЖЕ В РАБОТЕ) =====
         elder.setAssignedOperatorId(userId);
         elder.setTakenAt(LocalDateTime.now());
         elder.setStatus(ElderStatus.IN_PROGRESS);
         elderService.updateElder(elder);
 
+        // ===== НАЧИСЛЯЕМ БАЛЛЫ =====
+        int takeBonus = bonusSettingService.getBonusValue("take_elder");
+        if (takeBonus == 0) takeBonus = 1;
+
+        operator.setBonusPoints(operator.getBonusPoints() + takeBonus);
         operator.incrementTotalTaken();
         userService.saveUser(operator);
 
-        int takeBonus = bonusSettingService.getBonusValue("take_elder");
-        operator.setBonusPoints(operator.getBonusPoints() + takeBonus);
-        userService.saveUser(operator);
-        log.info("💰 Оператор {} взял заявку #{}, потрачено {} баллов",
+        log.info("💰 Оператор {} взял заявку #{}, начислено {} баллов",
                 operator.getTelegramId(), elderId, takeBonus);
 
-        if (elder.getCreatedBy() != null && !elder.getCreatedBy().equals(operator.getTelegramId())) {
-            User author = getUserOrNull(elder.getCreatedBy());
-            if (author != null && isOperator(author)) {
-                author.setBonusPoints(author.getBonusPoints() + 1);
-                userService.saveUser(author);
-                log.info("💰 Автору {} начислен 1 балл за создание заявки #{}",
-                        author.getTelegramId(), elderId);
-            }
-        }
-
-        int operatorBalance = operator.getBonusPoints();
-        String authorBonusInfo = "";
-        if (elder.getCreatedBy() != null && !elder.getCreatedBy().equals(operator.getTelegramId())) {
-            User author = getUserOrNull(elder.getCreatedBy());
-            if (author != null && isOperator(author)) {
-                authorBonusInfo = "\n👤 **Автору заявки** (" + author.getFirstName() + ") начислен **+1 балл**!";
-            }
-        }
-
-        // ===== ТЕПЕРЬ ПОКАЗЫВАЕМ ПОЛНУЮ ИНФОРМАЦИЮ С КОНТАКТАМИ =====
+        // ===== ОТВЕТ С КОНТАКТАМИ =====
         String contactInfo = "✅ **Вы взяли заявку #" + elderId + " в работу!**\n\n" +
-                "📋 **Полная информация о заявке:**\n" +
+                "📋 **Полная информация:**\n" +
                 "━━━━━━━━━━━━━━━━━━━━━━━\n" +
                 "👤 **Имя подопечного:** " + elder.getFullName() + "\n" +
                 "📍 **Локация:** " + elder.getPreferredLocation() + "\n" +
@@ -106,9 +91,7 @@ public class OperatorService {
                 "👤 **Имя:** " + elder.getClientFirstName() + "\n" +
                 "📞 **Телефон:** " + elder.getClientPhone() + "\n" +
                 "━━━━━━━━━━━━━━━━━━━━━━━\n" +
-                "💰 **Ваш баланс:** " + operatorBalance + " баллов (-1 за взятие заявки)" +
-                authorBonusInfo + "\n\n" +
-                "📌 Свяжитесь с клиентом для обсуждения деталей.";
+                "💰 **Ваш баланс:** " + operator.getBonusPoints() + " баллов (+" + takeBonus + " за взятие)";
 
         UniversalResponse response = new UniversalResponse(contactInfo);
         response.addButton("📋 Мои заявки", "my_requests");

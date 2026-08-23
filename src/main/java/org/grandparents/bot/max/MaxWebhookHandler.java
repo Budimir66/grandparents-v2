@@ -20,6 +20,7 @@ import org.grandparents.service.CareHomeService;
 import org.grandparents.service.UserStateService;
 import org.grandparents.statemachine.DialogState;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -216,6 +217,7 @@ public class MaxWebhookHandler {
 
     // ===== ОТПРАВКА ОТВЕТА =====
     // ===== ОТПРАВКА ОТВЕТА =====
+    @Async
     public void sendResponse(Long chatId, UniversalResponse response) {
         if (response == null || response.getText() == null) {
             log.warn("⚠️ Нет ответа для отправки");
