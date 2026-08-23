@@ -41,9 +41,6 @@ public class UserStateService {
 
     private final Map<Long, Long> editingCareHomeId = new ConcurrentHashMap<>();
 
-    // ===== ЦЕЛЬ ЗАПРОСА КОНТАКТА =====
-    private final Map<Long, String> tempPurpose = new ConcurrentHashMap<>();
-
     // ===== ВРЕМЕННЫЕ ДАННЫЕ ДЛЯ НАСТРОЕК =====
     private final Map<Long, Double> tempBudgetMin = new HashMap<>();
     private final Map<Long, String> tempTimeFrom = new HashMap<>();
@@ -73,13 +70,6 @@ public class UserStateService {
         return lastBotMessageId.get(userId);
     }
 
-    public void setTempPurpose(Long userId, String purpose) {
-        tempPurpose.put(userId, purpose);
-    }
-
-    public String getTempPurpose(Long userId) {
-        return tempPurpose.get(userId);
-    }
 
     public DialogState getState(Long userId) {
         return states.getOrDefault(userId, DialogState.START);
@@ -100,7 +90,6 @@ public class UserStateService {
         tempCareHomePrice.remove(userId);
         editingCareHomeId.remove(userId);
         tempOperatorPhone.remove(userId);
-        tempPurpose.remove(userId);
         tempCareHomeWebsite.remove(userId);
         lastBotMessageId.remove(userId);
 
@@ -190,11 +179,6 @@ public class UserStateService {
         return tempOperatorPhone.get(userId);
     }
 
-    public void clearTempPurpose(Long userId) {
-        tempPurpose.remove(userId);
-        log.info("🧹 Очищен tempPurpose для пользователя " + userId);
-    }
-
     public void setTempBudgetMin(Long userId, Double value) {
         tempBudgetMin.put(userId, value);
     }
@@ -271,18 +255,7 @@ public class UserStateService {
     // ===== РЕДАКТИРОВАНИЕ ОПЕРАТОРА =====
     private final Map<Long, Long> editingOperatorId = new ConcurrentHashMap<>();
 
-    public void setEditingOperatorId(Long userId, Long operatorId) {
-        editingOperatorId.put(userId, operatorId);
-    }
-
-    public Long getEditingOperatorId(Long userId) {
-        return editingOperatorId.get(userId);
-    }
-
-    public void clearEditingOperatorId(Long userId) {
-        editingOperatorId.remove(userId);
-    }
-    // ===== ФИЛЬТР ПО ДАТЕ =====
+      // ===== ФИЛЬТР ПО ДАТЕ =====
     private final Map<Long, Boolean> filterTodayOnly = new ConcurrentHashMap<>();
 
     public void setFilterTodayOnly(Long userId, boolean enabled) {

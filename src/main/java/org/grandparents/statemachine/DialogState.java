@@ -52,8 +52,7 @@ public enum DialogState {
      * Анкета заполнена, заявка создаётся
      */
     COMPLETED,
-
-    AWAITING_ELDER_PHONE,          // Ожидание выбора способа ввода телефона
+    AWAITING_ELDER_PHONE,
     AWAITING_ELDER_PHONE_MANUAL,   // Ожидание ручного ввода телефона
     EDITING_ELDER,  // Режим редактирования заявки
     EDITING_ELDER_NAME,
@@ -75,13 +74,8 @@ public enum DialogState {
     EDITING_CAREHOME_SPECIALIZATION,
     EDITING_CAREHOME_CONFIRM,
     EDITING_CAREHOME_PHOTO,
-    AWAITING_OPERATOR_ID,
-    AWAITING_OPERATOR_NAME,
-    AWAITING_OPERATOR_PHONE,
-    AWAITING_OPERATOR_CAREHOME_NAME,
     VIEWING_ELDER,
     CONFIRM_DELETE_ELDER,
-    AWAITING_CONTACT_FROM_MAX,// Ожидание контакта из MAX// Подтверждение удаления заявки// Просмотр карточки заявки
     AWAITING_ELDER_FINAL_COMMENTS,  // ← Финальные пожелания (последний шаг)
     AWAITING_CLIENT_NAME,  // Имя клиента (для операторов)
     AWAITING_MY_REQUESTS_CHOICE,  // Выбор раздела в "Мои заявки"
@@ -126,8 +120,6 @@ public enum DialogState {
     ADMIN_EDIT_CAREHOME_WEBSITE,
     AWAITING_REJECT_COMMENT_FOR_ELDER,  // Ожидание комментария при отклонении заявки
     AWAITING_OFFER_ACCEPT,  // Ожидание принятия оферты
-    EDITING_OPERATOR_NAME,   // Редактирование имени оператора
-    EDITING_OPERATOR_PHONE,  // Редактирование телефона оператора
     EDITING_PROFILE_NAME,
     EDITING_PROFILE_PHONE,
     EDITING_PROFILE_WHATSAPP,

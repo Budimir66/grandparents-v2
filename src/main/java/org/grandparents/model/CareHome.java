@@ -107,11 +107,6 @@ public class CareHome {
     private LocalDateTime moderationRequestedAt;
 
 
-
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "care_home_photos", joinColumns = @JoinColumn(name = "care_home_id"))
-    @Column(name = "photo_url")
-    private List<String> photos = new ArrayList<>();
     // ===== СПИСОК СОТРУДНИКОВ (храним как строку) =====
     // ВАЖНО: Для простоты хранения списка операторов используем строку с разделителями,
     // либо пока просто оставляем поле без привязки к базе.
@@ -288,15 +283,6 @@ public class CareHome {
         this.specialization = specialization;
     }
 
-    public List<String> getPhotos() {
-        return photos;
-    }
-
-    public void setPhotos(List<String> photos) {
-        this.photos = photos;
-    }
-
-
     public boolean isActive() { return isActive; }
     public void setActive(boolean active) { isActive = active; }
 
@@ -398,14 +384,7 @@ public class CareHome {
                 ", isSubscribed=" + isSubscribed +
                 '}';
     }
-    public void addPhoto(String photoUrl) {
-        if (this.photos == null) {
-            this.photos = new ArrayList<>();
-        }
-        if (this.photos.size() < 5) {
-            this.photos.add(photoUrl);
-        }
-    }
+
     // Метод для добавления дохода
     public void addMonthlyRevenue(Double amount) {
         if (this.monthlyRevenue == null) this.monthlyRevenue = 0.0;

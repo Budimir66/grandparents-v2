@@ -714,29 +714,6 @@ public class BotService {
             return handleMyRequests(userId);
         }
 
-        // ===== ПРОПУСТИТЬ ШАГ РЕДАКТИРОВАНИЯ ОПЕРАТОРА =====
-        if (callbackData.equals("skip_edit_operator")) {
-            Long operatorId = stateService.getEditingOperatorId(userId);
-            if (operatorId == null) {
-                return responseWithMainMenu("❌ Нет активного редактирования.");
-            }
-
-            DialogState currentState = stateService.getState(userId);
-            if (currentState == null) {
-                return responseWithMainMenu("❌ Нет активного редактирования.");
-            }
-
-            // Передаём управление с пустым текстом (означает "оставить как было")
-            return elderFormService.handleFormInput(userId, "skip_edit_operator", currentState);
-        }
-
-// ===== РЕДАКТИРОВАНИЕ ОПЕРАТОРА =====
-        if (callbackData.startsWith("edit_operator_")) {
-            String operatorIdStr = callbackData.substring("edit_operator_".length());
-            Long operatorId = Long.parseLong(operatorIdStr);
-            return careHomeManagementService.startEditOperator(userId, operatorId);
-        }
-
 // ===== ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ ОПЕРАТОРА =====
         if (callbackData.startsWith("confirm_delete_operator_")) {
             String operatorIdStr = callbackData.substring("confirm_delete_operator_".length());
@@ -761,29 +738,6 @@ public class BotService {
             String operatorIdStr = callbackData.substring("view_operator_".length());
             Long operatorId = Long.parseLong(operatorIdStr);
             return careHomeManagementService.showOperatorCard(userId, operatorId);
-        }
-
-        // ===== ВЫБОР ПАНСИОНАТА ДЛЯ РЕГИСТРАЦИИ ОПЕРАТОРА =====
-        if (callbackData.startsWith("select_carehome_for_operator_")) {
-            String param = callbackData.substring("select_carehome_for_operator_".length());
-
-            if ("all".equals(param)) {
-                // Вся сеть
-                stateService.setEditingCareHomeId(userId, -1L);
-            } else {
-                Long careHomeId = Long.parseLong(param);
-                stateService.setEditingCareHomeId(userId, careHomeId);
-            }
-
-            stateService.setState(userId, DialogState.AWAITING_OPERATOR_PHONE);
-
-            UniversalResponse response = new UniversalResponse(
-                    "📱 **Регистрация оператора**\n\n" +
-                            "Введите номер телефона оператора в формате:\n" +
-                            "+7 999 123-45-67"
-            );
-            response.addButtonFullRow("❌ Отменить", "cancel_action");
-            return response;
         }
 
 // ===== СПИСОК ОПЕРАТОРОВ ПАНСИОНАТА (ИЗ КАРТОЧКИ) =====
@@ -831,61 +785,6 @@ public class BotService {
             return adminService.showAdminMenu(userId);
         }
 
-        // ===== РЕГИСТРАЦИЯ ОПЕРАТОРА =====
-        if (callbackData.equals("register_operator")) {
-            user = getUserOrNull(userId);
-            if (user == null) {
-                return responseWithMainMenu("❌ Пользователь не найден.");
-            }
-
-            // Проверяем, что пользователь MANAGER или ADMIN
-            if (user.getAccessLevel() != AccessLevel.MANAGER && user.getAccessLevel() != AccessLevel.ADMIN) {
-                return responseWithMainMenu("❌ Только директор может регистрировать операторов.");
-            }
-
-            // Получаем все пансионаты MANAGER
-            List<CareHome> careHomes = careHomeService.findByProposedBy(userId);
-            if (user.getCareHomeId() != null) {
-                CareHome careHome = careHomeService.findById(user.getCareHomeId());
-                if (careHome != null && !careHomes.contains(careHome)) {
-                    careHomes.add(careHome);
-                }
-            }
-
-            if (careHomes.isEmpty()) {
-                return responseWithMainMenu("❌ У вас нет пансионатов для регистрации оператора.");
-            }
-
-            // Если только один пансионат — сразу спрашиваем номер телефона
-            if (careHomes.size() == 1) {
-                stateService.setEditingCareHomeId(userId, careHomes.get(0).getId());
-                stateService.setState(userId, DialogState.AWAITING_OPERATOR_PHONE);
-
-                UniversalResponse response = new UniversalResponse(
-                        "📱 **Регистрация оператора**\n\n" +
-                                "Пансионат: **" + careHomes.get(0).getName() + "**\n\n" +
-                                "Введите номер телефона оператора в формате:\n" +
-                                "+7 999 123-45-67"
-                );
-                response.addButtonFullRow("❌ Отменить", "cancel_action");
-                return response;
-            }
-
-            // Если несколько пансионатов — показываем список для выбора
-            UniversalResponse response = new UniversalResponse(
-                    "🏢 **Выберите пансионат для регистрации оператора:**\n\n" +
-                            "📌 Оператор будет привязан к выбранному пансионату."
-            );
-
-            for (CareHome careHome : careHomes) {
-                response.addButtonFullRow(careHome.getName(), "select_carehome_for_operator_" + careHome.getId());
-            }
-
-            // ===== КНОПКА "ВСЯ СЕТЬ" =====
-            response.addButtonFullRow("🌐 Вся сеть", "select_carehome_for_operator_all");
-            response.addButtonFullRow("❌ Отменить", "cancel_action");
-            return response;
-        }
         // ===== ПРИНЯТИЕ ОФЕРТЫ =====
         if (callbackData.equals("accept_offer")) {
             // Проверяем, что пользователь в процессе предложения пансионата
@@ -1210,9 +1109,6 @@ public class BotService {
             
             Для возврата в главное меню нажмите кнопку ниже.""");
             case "register_carehome" -> handleRegisterCarehome(userId);
-            case "register_operator" -> handleRegisterOperator(userId);
-            case "request_contact_from_max" -> handleRequestContactFromMax(userId);
-            case "enter_phone_manually" -> handleEnterPhoneManually(userId);
             case "my_requests_created" -> showMyRequestsByType(userId, "created");
             case "my_requests_in_progress" -> showMyRequestsByType(userId, "in_progress");
             case "my_requests_interested" -> showMyRequestsByType(userId, "interested");
@@ -1391,83 +1287,6 @@ public class BotService {
                 return response;
             }
 
-            case EDITING_OPERATOR_NAME -> {
-                Long operatorId = stateService.getEditingOperatorId(userId);
-                if (operatorId == null) {
-                    return responseWithMainMenu("❌ Ошибка: оператор не найден.");
-                }
-
-                User operator = userService.findById(operatorId);
-                if (operator == null) {
-                    stateService.clearState(userId);
-                    return responseWithMainMenu("❌ Оператор не найден.");
-                }
-
-                // Если пользователь ввёл текст — сохраняем имя
-                if (text != null && !text.trim().isEmpty() && !text.equals("skip_edit_operator")) {
-                    operator.setFirstName(text.trim());
-                    userService.saveUser(operator);
-                    log.info("✏️ Имя оператора {} изменено на {}", operatorId, text.trim());
-                }
-
-                // Переход к следующему шагу — редактирование телефона
-                stateService.setState(userId, DialogState.EDITING_OPERATOR_PHONE);
-
-                response = new UniversalResponse(
-                        "✏️ **Редактирование оператора**\n\n" +
-                                "📱 Текущий телефон: " + (operator.getPhone() != null ? operator.getPhone() : "не указан") + "\n\n" +
-                                "Введите **новый номер телефона** (или нажмите 'Оставить без изменений'):"
-                );
-                response.addButton("⏭️ Оставить как есть", "skip_edit_operator");
-                response.addButton("❌ Отменить", "cancel_action");
-                return response;
-            }
-
-            case EDITING_OPERATOR_PHONE -> {
-                Long operatorId = stateService.getEditingOperatorId(userId);
-                if (operatorId == null) {
-                    return responseWithMainMenu("❌ Ошибка: оператор не найден.");
-                }
-
-                User operator = userService.findById(operatorId);
-                if (operator == null) {
-                    stateService.clearState(userId);
-                    return responseWithMainMenu("❌ Оператор не найден.");
-                }
-
-                // Если пользователь ввёл текст — сохраняем телефон
-                if (text != null && !text.trim().isEmpty() && !text.equals("skip_edit_operator")) {
-                    String phone = text.trim().replaceAll("[^0-9+]", "");
-                    if (phone.matches("^[+]?[0-9]{10,15}$")) {
-                        operator.setPhone(phone);
-                        userService.saveUser(operator);
-                        log.info("✏️ Телефон оператора {} изменён на {}", operatorId, phone);
-                    } else {
-                        response = new UniversalResponse(
-                                "❌ Неверный формат телефона.\n\n" +
-                                        "Введите номер в формате +7 999 123-45-67\n" +
-                                        "или нажмите 'Оставить как есть':"
-                        );
-                        response.addButton("⏭️ Оставить как есть", "skip_edit_operator");
-                        response.addButton("❌ Отменить", "cancel_action");
-                        return response;
-                    }
-                }
-
-                // Завершаем редактирование
-                stateService.clearState(userId);
-                stateService.clearEditingOperatorId(userId);
-
-             response = new UniversalResponse(
-                        "✅ **Данные оператора обновлены!**\n\n" +
-                                "👤 Имя: " + operator.getFirstName() + "\n" +
-                                "📱 Телефон: " + (operator.getPhone() != null ? operator.getPhone() : "не указан")
-                );
-                response.addButtonFullRow("👥 Список операторов", "manager_operators");
-                response.addButtonFullRow("🔙 Назад к оператору", "view_operator_" + operatorId);
-                response.addButtonFullRow("🏠 Главное меню", "main_menu");
-                return response;
-            }
             // ===== СОЗДАНИЕ ЗАЯВКИ (все шаги анкеты) ==================================================================================
             case AWAITING_ELDER_NAME, AWAITING_CLIENT_NAME, AWAITING_ELDER_AGE,
                  AWAITING_ELDER_HEALTH, AWAITING_ELDER_BUDGET, AWAITING_ELDER_LOCATION,
@@ -2187,92 +2006,6 @@ public class BotService {
                 return response;
             }
 
-            // ===== РЕГИСТРАЦИЯ ОПЕРАТОРА (ШАГ 1: ПАНСИОНАТ) =====
-            case AWAITING_OPERATOR_CAREHOME_NAME -> {
-                String careHomeName = text.trim();
-                careHome = careHomeService.findByNameExact(careHomeName);
-
-                if (careHome == null) {
-                    response = new UniversalResponse(
-                            "❌ Пансионат с названием \"" + careHomeName + "\" не найден.\n\n" +
-                                    "Проверьте название или зарегистрируйте пансионат через меню 'Пансионаты'."
-                    );
-                    response.addButton("🏠 Главное меню", "main_menu");
-                    stateService.clearState(userId);
-                    return response;
-                }
-
-                stateService.setEditingCareHomeId(userId, careHome.getId());
-                stateService.setState(userId, DialogState.AWAITING_OPERATOR_NAME);
-
-                response = new UniversalResponse("👤 Введите ваше имя (как вас называть):");
-                response.addButton("❌ Отменить", "cancel_action");
-                return response;
-            }
-
-            // ===== РЕГИСТРАЦИЯ ОПЕРАТОРА (ШАГ 2: ИМЯ) =====
-            case AWAITING_OPERATOR_NAME -> {
-                stateService.setTempCareHomeName(userId, text.trim());
-                stateService.setState(userId, DialogState.AWAITING_OPERATOR_PHONE);
-
-                response = new UniversalResponse(
-                        "📱 Введите ваш номер телефона для связи:\n\n" +
-                                "Введите номер в формате +7 999 123-45-67\n" +
-                                "или просто 89991234567"
-                );
-                response.addButton("❌ Отменить", "cancel_action");
-                return response;
-            }
-
-            // ===== РЕГИСТРАЦИЯ ОПЕРАТОРА (ШАГ 3: ТЕЛЕФОН + СОХРАНЕНИЕ) =====
-            case AWAITING_OPERATOR_PHONE -> {
-                cleanPhone = text.replaceAll("[^0-9+]", "");
-                if (!cleanPhone.matches("^[+]?[0-9]{10,15}$")) {
-                    response = new UniversalResponse(
-                            "❌ Неверный формат. Введите номер в формате +7 999 123-45-67:"
-                    );
-                    response.addButton("❌ Отменить", "cancel_action");
-                    return response;
-                }
-
-                Long careHomeId = stateService.getEditingCareHomeId(userId);
-                String operatorName = stateService.getTempCareHomeName(userId);
-
-                // ===== СОЗДАЁМ НОВОГО ПОЛЬЗОВАТЕЛЯ С РОЛЬЮ OPERATOR =====
-                User operator = new User();
-                operator.setTelegramId(userId);  // В реальности здесь должен быть ID нового оператора
-                operator.setFirstName(operatorName);
-                operator.setPhone(cleanPhone);
-                operator.setAccessLevel(AccessLevel.OPERATOR);
-                operator.setCareHomeId(careHomeId);
-
-                // ===== НАЧИСЛЯЕМ СТАРТОВЫЙ БОНУС ТОЛЬКО ОПЕРАТОРУ =====
-                int startBonus = bonusSettingService.getBonusValue("start_bonus");
-                operator.setBonusPoints(startBonus);
-                operator.setRegistered(true);
-                operator.setActive(true);
-                userService.saveUser(operator);
-
-                stateService.clearState(userId);
-
-               careHome = careHomeService.findById(careHomeId);
-
-                response = new UniversalResponse(
-                        "✅ **Оператор зарегистрирован!**\n\n" +
-                                "🏢 **Пансионат:** " + careHome.getName() + "\n" +
-                                "👤 **Имя оператора:** " + operatorName + "\n" +
-                                "📱 **Телефон:** " + cleanPhone + "\n\n" +
-                                "🎁 Оператору начислен стартовый бонус: **" + startBonus + " баллов**\n\n" +
-                                "📌 Теперь оператор может:\n" +
-                                "• Искать и брать заявки в работу\n" +
-                                "• Управлять заявками\n" +
-                                "• Получать бонусы за работу\n\n" +
-                                "🚀 Удачи!"
-                );
-                response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
-                response.addButtonFullRow("🏠 Главное меню", "main_menu");
-                return response;
-            }
 
             // ===== АДМИН: БЛОКИРОВКА ОПЕРАТОРА =====
             case AWAITING_ADMIN_OPERATOR_ID -> {
@@ -3006,61 +2739,6 @@ public class BotService {
                 "🏢 Введите название нового пансионата:",
                 "menu_carehomes"
         );
-    }
-
-    /**
-     * Регистрация оператора (только для MANAGER)
-     */
-    private UniversalResponse handleRegisterOperator(Long userId) {
-        User user = getUserOrNull(userId);
-        if (user == null) {
-            return responseWithMainMenu("❌ Пользователь не найден.");
-        }
-
-        // ===== ТОЛЬКО MANAGER (ДИРЕКТОР) МОЖЕТ РЕГИСТРИРОВАТЬ ОПЕРАТОРА =====
-        if (user.getAccessLevel() != AccessLevel.MANAGER) {
-            return responseWithMainMenu("❌ Только директор пансионата может регистрировать операторов.");
-        }
-
-        // Проверяем, есть ли у директора привязанный пансионат
-        if (user.getCareHomeId() == null) {
-            return responseWithMainMenu("❌ У вас нет привязанного пансионата.");
-        }
-
-        stateService.setState(userId, DialogState.AWAITING_OPERATOR_NAME);
-        stateService.setEditingCareHomeId(userId, user.getCareHomeId());
-
-        UniversalResponse response = new UniversalResponse(
-                "🔑 **Регистрация оператора**\n\n" +
-                        "👤 Введите **имя** оператора (как его называть):"
-        );
-        response.addButtonFullRow("❌ Отменить", "cancel_action");
-        response.addButtonFullRow("🔙 Назад", "my_carehomes");
-        return response;
-    }
-
-    private UniversalResponse handleRequestContactFromMax(Long userId) {
-        stateService.setTempPurpose(userId, "elder_phone");
-        stateService.setState(userId, DialogState.AWAITING_CONTACT_FROM_MAX);
-
-        UniversalResponse response = new UniversalResponse(
-                "📱 Нажмите кнопку ниже, чтобы отправить ваш номер телефона:"
-        );
-        response.addContactRequestButton("📱 Отправить номер");
-        response.addButton("❌ Отменить", "cancel_action");
-        return response;
-    }
-
-    private UniversalResponse handleEnterPhoneManually(Long userId) {
-        stateService.setState(userId, DialogState.AWAITING_ELDER_PHONE_MANUAL);
-        UniversalResponse response = new UniversalResponse(
-                "📱 Введите номер телефона в формате:\n\n" +
-                        "+7 999 123-45-67\n" +
-                        "или просто 89991234567\n\n" +
-                        "Для отмены нажмите кнопку ниже."
-        );
-        response.addButton("❌ Отменить", "cancel_action");
-        return response;
     }
 
     // ============================================================

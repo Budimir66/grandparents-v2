@@ -877,7 +877,6 @@ public class CareHomeManagementService {
 
         // ===== КНОПКА РЕГИСТРАЦИИ ОПЕРАТОРА =====
         response.addButtonFullRow("➕ Пригласить оператора", "invite_operator");
-      //  response.addButtonFullRow("📝 Регистрация оператора", "register_operator");
         response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
@@ -942,7 +941,6 @@ public class CareHomeManagementService {
         }
 
         // ===== КНОПКИ =====
-        response.addButtonFullRow("📝 Регистрация оператора", "register_operator");
         response.addButtonFullRow("🔙 Назад к пансионату", "view_my_carehome_" + careHomeId);
         response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
@@ -1011,7 +1009,6 @@ public class CareHomeManagementService {
         UniversalResponse response = new UniversalResponse(sb.toString());
 
         // ===== КНОПКИ =====
-        response.addButtonFullRow("✏️ Редактировать", "edit_operator_" + operator.getId());
         response.addButtonFullRow("🗑️ Удалить", "confirm_delete_operator_" + operator.getId());
         response.addButtonFullRow("🔙 Назад", "manager_operators");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
@@ -1127,47 +1124,6 @@ public class CareHomeManagementService {
         }
         CareHome careHome = careHomeService.findById(careHomeId);
         return careHome != null ? careHome.getName() : "не указан";
-    }
-    /**
-     * Начать редактирование оператора (MANAGER/ADMIN)
-     */
-    public UniversalResponse startEditOperator(Long userId, Long operatorId) {
-        User user = getUserOrNull(userId);
-        if (user == null) {
-            return responseWithMainMenu("❌ Пользователь не найден.");
-        }
-
-        if (user.getAccessLevel() != AccessLevel.MANAGER && user.getAccessLevel() != AccessLevel.ADMIN) {
-            return responseWithMainMenu("❌ Доступ запрещён.");
-        }
-
-        User operator = userService.findById(operatorId);
-        if (operator == null) {
-            return responseWithBackAndMainMenu("❌ Оператор не найден.", "manager_operators");
-        }
-
-        // Проверяем, что оператор принадлежит MANAGER
-        List<CareHome> careHomes = careHomeService.findByProposedBy(userId);
-        boolean isOperatorBelongsToManager = careHomes.stream()
-                .anyMatch(ch -> ch.getId().equals(operator.getCareHomeId()));
-
-        if (!isOperatorBelongsToManager && user.getAccessLevel() != AccessLevel.ADMIN) {
-            return responseWithMainMenu("❌ Этот оператор не принадлежит вашим пансионатам.");
-        }
-
-        // Сохраняем ID оператора в состояние
-        stateService.setEditingOperatorId(userId, operatorId);
-        stateService.setState(userId, DialogState.EDITING_OPERATOR_NAME);
-
-        UniversalResponse response = new UniversalResponse(
-                "✏️ **Редактирование оператора**\n\n" +
-                        "👤 Текущее имя: " + operator.getFirstName() + "\n" +
-                        "📱 Текущий телефон: " + (operator.getPhone() != null ? operator.getPhone() : "не указан") + "\n\n" +
-                        "Введите **новое имя** оператора (или нажмите 'Оставить без изменений'):"
-        );
-        response.addButton("⏭️ Оставить без изменений", "skip_edit_operator");
-        response.addButton("❌ Отменить", "cancel_action");
-        return response;
     }
     private void sendResponse(Long chatId, UniversalResponse response) {
         messageSender.sendMessage(chatId, response);

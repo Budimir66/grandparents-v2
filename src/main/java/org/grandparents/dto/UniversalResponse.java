@@ -55,14 +55,6 @@ public class UniversalResponse {
         }
     }
 
-    public void addContactRequestButton(String text) {
-        Button button = new Button();
-        button.setText(text);
-        button.setType("request_contact");
-        button.setFullRow(true);
-        this.buttons.add(button);
-    }
-
     public void addMainMenuButton() {
         addButtonFullRow("🏠 Главное меню", "main_menu");
     }
