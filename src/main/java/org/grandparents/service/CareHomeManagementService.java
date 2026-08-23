@@ -959,21 +959,28 @@ public class CareHomeManagementService {
             return responseWithMainMenu("❌ Доступ запрещён.");
         }
 
-        // ===== ИЩЕМ ПО ID, А НЕ ПО TELEGRAM ID =====
-        User operator = userService.findById(operatorId);  // ← ИЗМЕНЕНО!
+        User operator = userService.findById(operatorId);
         if (operator == null) {
             return responseWithBackAndMainMenu("❌ Оператор не найден.", "manager_operators");
         }
 
-        // Проверяем, что оператор принадлежит MANAGER
-        List<CareHome> careHomes = careHomeService.findByProposedBy(userId);
-        boolean isOperatorBelongsToManager = careHomes.stream()
-                .anyMatch(ch -> ch.getId().equals(operator.getCareHomeId()));
-
-        if (!isOperatorBelongsToManager && user.getAccessLevel() != AccessLevel.ADMIN) {
-            return responseWithMainMenu("❌ Этот оператор не принадлежит вашим пансионатам.");
+        // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ПРИНАДЛЕЖИТ ЭТОМУ ПАНСИОНАТУ =====
+        boolean isOperatorBelongsToManager = false;
+        if (operator.getCareHomeId() != null) {
+            // Если директор — ADMIN, то видит всех
+            if (user.getAccessLevel() == AccessLevel.ADMIN) {
+                isOperatorBelongsToManager = true;
+            } else {
+                // Для MANAGER — проверяем, что оператор в его пансионате
+                List<CareHome> directorCareHomes = careHomeService.findByProposedBy(userId);
+                isOperatorBelongsToManager = directorCareHomes.stream()
+                        .anyMatch(ch -> ch.getId().equals(operator.getCareHomeId()));
+            }
         }
 
+        if (!isOperatorBelongsToManager) {
+            return responseWithMainMenu("❌ Этот оператор не принадлежит вашим пансионатам.");
+        }
         // ===== ФОРМИРУЕМ КАРТОЧКУ =====
         StringBuilder sb = new StringBuilder();
         sb.append("👤 **Карточка оператора**\n\n");
