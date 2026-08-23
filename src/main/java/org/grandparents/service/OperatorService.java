@@ -6,6 +6,7 @@ import org.grandparents.repository.OperatorReactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -279,41 +280,44 @@ public class OperatorService {
     // ===== ПОДТВЕРЖДЕНИЕ ЗАКРЫТИЯ =====
     // ============================================================
 
+    @Transactional
     public UniversalResponse confirmComplete(Long userId, Long elderId) {
         Elder elder = elderService.findById(elderId);
         if (elder == null) {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        if (elder.getStatus() != ElderStatus.IN_PROGRESS) {
-            return responseWithMainMenu("❌ Заявка уже закрыта или не в работе.");
+        // ===== ПРОВЕРЯЕМ, ЧТО ЗАЯВКА НЕ ЗАКРЫТА =====
+        if (elder.getStatus() == ElderStatus.COMPLETED) {
+            return responseWithMainMenu("✅ Заявка уже закрыта.");
+        }
+        if (elder.getStatus() == ElderStatus.EXPIRED || elder.getStatus() == ElderStatus.DELETED) {
+            return responseWithMainMenu("❌ Заявка неактивна и не может быть закрыта.");
         }
 
-        if (elder.getCompletedBy() != null) {
-            return responseWithMainMenu("❌ Заявка уже закрыта.");
-        }
-
+        // ===== ПРОВЕРЯЕМ ПРАВА =====
         boolean isAuthor = elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId);
         boolean isClient = elder.getClientTelegramId().equals(userId);
+        boolean isOperator = elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId);
 
-        if (!isAuthor && !isClient) {
-            return responseWithMainMenu("❌ Вы не можете подтвердить закрытие этой заявки.");
+        if (!isAuthor && !isClient && !isOperator) {
+            return responseWithMainMenu("❌ Вы не можете закрыть эту заявку.");
         }
 
+        // ===== НАЧИСЛЯЕМ БОНУСЫ =====
         User operator = null;
-        if (elder.getAssignedOperatorId() != null) {
-            operator = getUserOrNull(elder.getAssignedOperatorId());
-        }
-
         StringBuilder bonusInfo = new StringBuilder();
 
-        if (operator != null) {
-            int completeBonus = bonusSettingService.getBonusValue("complete_elder");
-            operator.setBonusPoints(operator.getBonusPoints() + completeBonus);
-            operator.incrementTotalCompleted();
-            userService.saveUser(operator);
-            bonusInfo.append("👤 **Оператор** ").append(operator.getFirstName())
-                    .append(" получил **+5 баллов**!\n");
+        if (elder.getAssignedOperatorId() != null) {
+            operator = getUserOrNull(elder.getAssignedOperatorId());
+            if (operator != null) {
+                int completeBonus = bonusSettingService.getBonusValue("complete_elder");
+                operator.setBonusPoints(operator.getBonusPoints() + completeBonus);
+                operator.incrementTotalCompleted();
+                userService.saveUser(operator);
+                bonusInfo.append("👤 **Оператор** ").append(operator.getFirstName())
+                        .append(" получил **+").append(completeBonus).append(" баллов**!\n");
+            }
         }
 
         if (elder.getCreatedBy() != null &&
@@ -326,15 +330,17 @@ public class OperatorService {
                 author.setBonusPoints(author.getBonusPoints() + authorBonus);
                 userService.saveUser(author);
                 bonusInfo.append("👤 **Автор заявки** ").append(author.getFirstName())
-                        .append(" получил **+3 балла** за заселение!\n");
+                        .append(" получил **+").append(authorBonus).append(" баллов** за заселение!\n");
             }
         }
 
+        // ===== ЗАКРЫВАЕМ ЗАЯВКУ =====
         elder.setStatus(ElderStatus.COMPLETED);
         elder.setCompletedBy(userId);
         elder.setCompletedAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
+        // ===== УВЕДОМЛЯЕМ ОПЕРАТОРА (ЕСЛИ ОН НЕ ТОТ, КТО ЗАКРЫЛ) =====
         if (operator != null && !operator.getTelegramId().equals(userId)) {
             UniversalResponse notifyOperator = new UniversalResponse(
                     "🎉 Заявка #" + elderId + " успешно закрыта!\n\n" +
@@ -345,6 +351,7 @@ public class OperatorService {
             messageSender.sendMessage(operator.getTelegramId(), notifyOperator);
         }
 
+        // ===== ОТВЕТ ТОМУ, КТО ЗАКРЫЛ =====
         String message = "🏁 **Заявка #" + elderId + " закрыта!**\n\n" +
                 "📋 **Информация о заявке:**\n" +
                 "👤 **Подопечный:** " + elder.getFullName() + "\n" +

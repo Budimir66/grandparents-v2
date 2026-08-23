@@ -299,7 +299,6 @@ public class BotService {
                     "📌 Просматривать статистику\n\n" +
                     "Выберите действие:");
 
-            response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
             response.addButtonFullRow("👥 Операторы", "manager_operators");
             response.addButtonFullRow("📋 Заявки", "menu_requests");
             response.addButtonFullRow("📊 Статистика", "manager_stats");
