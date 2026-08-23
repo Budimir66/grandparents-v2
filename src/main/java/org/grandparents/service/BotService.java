@@ -326,6 +326,22 @@ public class BotService {
 
         // ===== ОПЕРАТОР =====
         if (isOperator) {
+            // ===== ПРОВЕРКА НА БЛОКИРОВКУ =====
+            if (user.getIsBlocked() != null && user.getIsBlocked()) {
+                String blockedReason = user.getBlockedReason() != null
+                        ? user.getBlockedReason()
+                        : "Администратор временно ограничил доступ.";
+
+                response = new UniversalResponse(
+                        "⛔ **Доступ ограничен!**\n\n" +
+                                "Ваш аккаунт был заблокирован.\n\n" +
+                                "💬 Причина: " + blockedReason + "\n\n" +
+                                "📌 Для восстановления доступа обратитесь к руководителю."
+                );
+                response.addButtonFullRow("❓ Помощь", "help");
+                return response;
+            }
+
             int newRequests = (int) elderService.countActiveElders();
             int bonus = user.getBonusPoints();
 
@@ -336,7 +352,7 @@ public class BotService {
             response.addButton("📋 Заявки", "menu_requests");
             response.addButton("🏢 Мои пансионаты", "my_carehomes");
             response.addButton("📊 Моя статистика", "my_stats");
-            response.addButton("👤 Мой профиль", "my_profile");  // ← НОВАЯ КНОПКА
+            response.addButton("👤 Мой профиль", "my_profile");
             response.addButton("❓ Помощь", "help");
             return response;
         }
@@ -3444,7 +3460,7 @@ public class BotService {
         operator.setIsActive(false);
         operator.setIsBlocked(true);
         operator.setBlockedAt(LocalDateTime.now());
-        operator.setBlockedReason("Заблокирован директором");
+        operator.setBlockedReason("Заблокирован руководителем");
         userService.saveUser(operator);
 
         return responseWithMainMenu("🔒 Оператор **" + operator.getFirstName() + "** заблокирован.");
