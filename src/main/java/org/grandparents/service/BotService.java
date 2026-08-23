@@ -4,6 +4,7 @@ import org.grandparents.bot.max.MaxWebhookHandler;
 import org.grandparents.dto.UniversalMessage;
 import org.grandparents.dto.UniversalResponse;
 import org.grandparents.model.*;
+import org.grandparents.repository.BonusTransactionRepository;
 import org.grandparents.repository.OperatorReactionRepository;
 import org.grandparents.statemachine.DialogState;
 import org.slf4j.Logger;
@@ -38,6 +39,7 @@ public class BotService {
     private final OperatorService operatorService;
     private final StatisticsService statisticsService;
     private final InvitationService invitationService;
+    private final BonusTransactionRepository bonusTransactionRepository;
 
     public BotService(UserService userService,
                       ElderService elderService,
@@ -55,7 +57,8 @@ public class BotService {
                       UserSettingsService userSettingsService,
                       OperatorService operatorService,
                       StatisticsService statisticsService,
-                      InvitationService invitationService) {
+                      InvitationService invitationService,
+                      BonusTransactionRepository bonusTransactionRepository) {
         this.userService = userService;
         this.elderService = elderService;
         this.careHomeService = careHomeService;
@@ -73,6 +76,7 @@ public class BotService {
         this.operatorService = operatorService;
         this.statisticsService = statisticsService;
         this.invitationService = invitationService;
+        this.bonusTransactionRepository = bonusTransactionRepository;
     }
 
     // ============================================================
@@ -3335,6 +3339,16 @@ public class BotService {
 
         if (user.getBonusPoints() == 0) {
             user.setBonusPoints(10);
+            // ===== ЗАПИСЬ ТРАНЗАКЦИИ =====
+            BonusTransaction transaction = new BonusTransaction(
+                    user.getId(),
+                    null,
+                    TransactionType.INIT,
+                    10,
+                    "Стартовый бонус",
+                    user.getBonusPoints()
+            );
+            bonusTransactionRepository.save(transaction);
         }
         userService.saveUser(user);
 
