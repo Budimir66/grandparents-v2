@@ -61,7 +61,8 @@ public class ElderService {
                 ElderStatus.COMPLETED,
                 ElderStatus.EXPIRED,
                 ElderStatus.DELETED,
-                ElderStatus.PENDING
+                ElderStatus.PENDING,
+                ElderStatus.AWAITING_CONFIRMATION
         ));
     }
 
