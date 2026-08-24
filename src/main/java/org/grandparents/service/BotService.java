@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -404,6 +405,15 @@ public class BotService {
         // ===== УДАЛЕНИЕ АККАУНТА ОПЕРАТОРА =====
         if (callbackData.equals("delete_my_account")) {
             return confirmDeleteOperatorProfile(userId);
+        }
+
+        // В методе handleCallback (в начале, после проверки на help и другие)
+
+// ===== УБРАТЬ ИЗ ИНТЕРЕСНЫХ =====
+        if (callbackData.startsWith("remove_from_interested_")) {
+            String elderIdStr = callbackData.substring("remove_from_interested_".length());
+            Long elderId = Long.parseLong(elderIdStr);
+            return handleRemoveFromInterested(userId, elderId);
         }
 
 // ===== ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ =====
@@ -1171,6 +1181,7 @@ public class BotService {
 
         // ===== ГЛАВНОЕ МЕНЮ =====
         if (callbackData.equals("main_menu")) {
+            stateService.setViewingFromInterested(userId, false);
             return handleStartCommand(userId, chatId);
         }
 
@@ -2248,6 +2259,9 @@ public class BotService {
         boolean isAuthor = elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId);
         boolean isAssigned = elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId);
 
+        // ===== ПРОВЕРЯЕМ, ОТКРЫЛ ЛИ ОПЕРАТОР ЗАЯВКУ ИЗ "ИНТЕРЕСНЫХ" =====
+        boolean viewingFromInterested = stateService.isViewingFromInterested(userId);
+
         // ===== ФОРМИРУЕМ КАРТОЧКУ =====
         String card = "📋 **Заявка #" + elder.getId() + "**\n\n" +
                 "━━━━━━━━━━━━━━━━━━━━━━━\n" +
@@ -2259,9 +2273,8 @@ public class BotService {
                 "📌 **Статус:** " + elder.getStatus() + "\n" +
                 "━━━━━━━━━━━━━━━━━━━━━━━\n";
 
-        // ===== ПОКАЗЫВАЕМ ИМЯ И КОНТАКТЫ ТОЛЬКО ЕСЛИ ЗАЯВКА В РАБОТЕ =====
+        // ===== ПОКАЗЫВАЕМ ИМЯ И КОНТАКТЫ =====
         boolean canSeeContacts = isAssigned || isAuthor || isAdmin;
-
         if (canSeeContacts) {
             card += "👤 **Имя:** " + elder.getFullName() + "\n" +
                     "👤 **Клиент:** " + elder.getClientFirstName() + "\n" +
@@ -2270,27 +2283,35 @@ public class BotService {
             card += "🔒 **Имя и контакты скрыты**\n" +
                     "📌 Для получения контактов возьмите заявку в работу.\n";
         }
-
         card += "━━━━━━━━━━━━━━━━━━━━━━━";
 
         UniversalResponse response = new UniversalResponse(card);
 
-        // ===== КНОПКИ (НА ВСЮ СТРОКУ) =====
+        // ===== КНОПКИ ДЛЯ ОПЕРАТОРА =====
         if (isOperator && !isAuthor) {
-            if (elder.getAssignedOperatorId() == null) {
-                if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
-                    response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
-                    response.addButtonFullRow("👍 Интересно", "interested_elder_" + elderId);
-                    response.addButtonFullRow("👎 Не подходит", "not_interested_elder_" + elderId);
+            // ===== ЕСЛИ ОПЕРАТОР СМОТРИТ ИЗ "ИНТЕРЕСНЫХ" =====
+            if (viewingFromInterested) {
+                // Показываем кнопку "Убрать из интересных"
+                response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
+            } else {
+                // Обычный режим — показываем стандартные кнопки
+                if (elder.getAssignedOperatorId() == null) {
+                    if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
+                        response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
+                        response.addButtonFullRow("👍 Интересно", "interested_elder_" + elderId);
+                        response.addButtonFullRow("👎 Не подходит", "not_interested_elder_" + elderId);
+                    }
                 }
             }
 
+            // Кнопка "Связаться через MAX" (если заявка в работе)
             if (isAssigned && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
             }
         }
 
+        // ===== КНОПКИ ДЛЯ АВТОРА (КЛИЕНТА) =====
         if (isAuthor) {
             if (elder.getAssignedOperatorId() == null) {
                 if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
@@ -2302,8 +2323,13 @@ public class BotService {
             }
         }
 
-        // ===== ОБЩИЕ КНОПКИ (можно оставить как есть или тоже на всю строку) =====
-        response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
+        // ===== ОБЩИЕ КНОПКИ =====
+        // Если смотрели из "Интересных", возвращаем туда же
+        if (viewingFromInterested) {
+            response.addButtonFullRow("⭐ Интересные заявки", "my_requests_interested");
+        } else {
+            response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
+        }
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
 
         return response;
@@ -2687,25 +2713,19 @@ public class BotService {
             return responseWithBackAndMainMenu("❌ Доступно только для операторов.", "menu_requests");
         }
 
-        // ===== НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ =====
-        String city = user.getPreferredCity();
-        String region = user.getPreferredRegion();
-        Double budgetMin = user.getBudgetMin();
-        Double budgetMax = user.getBudgetMax();
+        // ===== 1. Получаем ID заявок, которые оператор уже отметил как "Интересные" =====
+        List<Long> interestedElderIds = reactionRepository.findInterestedElderIdsByOperatorId(userId);
 
-        boolean filterTodayOnly = stateService.isFilterTodayOnly(userId);
-
-        boolean hasCityFilter = city != null && !city.trim().isEmpty();
-        boolean hasRegionFilter = region != null && !region.trim().isEmpty();
-        boolean hasFilters = hasCityFilter || hasRegionFilter ||
-                budgetMin != null || budgetMax != null ||
-                filterTodayOnly;
-
-        // ===== ФИЛЬТРАЦИЯ =====
+        // ===== 2. Получаем все активные заявки, исключая уже "Интересные" =====
         List<Elder> allElders = elderService.findActiveElders();
 
+        // Фильтруем: исключаем заявки, которые уже в "Интересных" у этого оператора
         List<Elder> filteredElders = allElders.stream()
+                .filter(elder -> !interestedElderIds.contains(elder.getId()))
                 .filter(elder -> {
+                    // ===== 3. Применяем остальные фильтры (город, бюджет, дата) =====
+                    boolean filterTodayOnly = stateService.isFilterTodayOnly(userId);
+
                     // Фильтр по дате
                     if (filterTodayOnly) {
                         LocalDateTime today = LocalDateTime.now();
@@ -2715,7 +2735,12 @@ public class BotService {
                         }
                     }
 
-                    // Фильтр по городу/региону (ИЛИ)
+                    // Фильтр по городу/региону
+                    String city = user.getPreferredCity();
+                    String region = user.getPreferredRegion();
+                    boolean hasCityFilter = city != null && !city.trim().isEmpty();
+                    boolean hasRegionFilter = region != null && !region.trim().isEmpty();
+
                     if (hasCityFilter || hasRegionFilter) {
                         String elderCity = elder.getCity() != null ? elder.getCity().toLowerCase() : "";
                         String elderLocation = elder.getPreferredLocation() != null ? elder.getPreferredLocation().toLowerCase() : "";
@@ -2740,6 +2765,8 @@ public class BotService {
                     }
 
                     // Фильтр по бюджету
+                    Double budgetMin = user.getBudgetMin();
+                    Double budgetMax = user.getBudgetMax();
                     if (budgetMin != null && elder.getBudget() < budgetMin) return false;
                     if (budgetMax != null && elder.getBudget() > budgetMax) return false;
 
@@ -2747,7 +2774,7 @@ public class BotService {
                 })
                 .collect(Collectors.toList());
 
-        // ===== ОТВЕТ =====
+        // ===== 4. Формируем ответ =====
         UniversalResponse response;
 
         if (filteredElders.isEmpty()) {
@@ -2770,31 +2797,31 @@ public class BotService {
             StringBuilder message = new StringBuilder();
             message.append("🔍 **Доступные заявки (страница ").append(page + 1).append(" из ").append(totalPages).append("):**\n\n");
 
-            if (hasCityFilter) {
-                message.append("📍 Город: ").append(city).append("\n");
+            // Показываем активные фильтры
+            if (user.getPreferredCity() != null) {
+                message.append("📍 Город: ").append(user.getPreferredCity()).append("\n");
             }
-            if (hasRegionFilter) {
-                message.append("📍 Регион: ").append(region).append("\n");
+            if (user.getPreferredRegion() != null) {
+                message.append("📍 Регион: ").append(user.getPreferredRegion()).append("\n");
             }
-            if (budgetMin != null || budgetMax != null) {
+            if (user.getBudgetMin() != null || user.getBudgetMax() != null) {
                 String budgetText = "";
-                if (budgetMin != null && budgetMax != null) {
-                    budgetText = budgetMin + " - " + budgetMax + " руб.";
-                } else if (budgetMin != null) {
-                    budgetText = "от " + budgetMin + " руб.";
-                } else if (budgetMax != null) {
-                    budgetText = "до " + budgetMax + " руб.";
+                if (user.getBudgetMin() != null && user.getBudgetMax() != null) {
+                    budgetText = user.getBudgetMin() + " - " + user.getBudgetMax() + " руб.";
+                } else if (user.getBudgetMin() != null) {
+                    budgetText = "от " + user.getBudgetMin() + " руб.";
+                } else if (user.getBudgetMax() != null) {
+                    budgetText = "до " + user.getBudgetMax() + " руб.";
                 }
                 message.append("💰 Бюджет: ").append(budgetText).append("\n");
             }
-            if (filterTodayOnly) {
-                message.append("📅 За сегодня\n");
+            if (stateService.isFilterTodayOnly(userId)) {
+                message.append("📅 Только за сегодня\n");
             }
 
-            if (hasFilters) {
-                if (hasCityFilter || hasRegionFilter) {
-                    message.append("📌 Ищутся заявки с **ИЛИ** город, **ИЛИ** регион\n");
-                }
+            if (user.getPreferredCity() != null || user.getPreferredRegion() != null ||
+                    user.getBudgetMin() != null || user.getBudgetMax() != null ||
+                    stateService.isFilterTodayOnly(userId)) {
                 message.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
             }
 
@@ -2819,13 +2846,16 @@ public class BotService {
             }
         }
 
-        // ===== КНОПКИ ФИЛЬТРОВ (ВСЕГДА ВНИЗУ) =====
-        if (filterTodayOnly) {
+        // ===== 5. Кнопки управления фильтрами =====
+        if (stateService.isFilterTodayOnly(userId)) {
             response.addButtonFullRow("📅 Показать все", "filter_today_off");
         } else {
             response.addButtonFullRow("📅 Только за сегодня", "filter_today_on");
         }
 
+        boolean hasFilters = user.getPreferredCity() != null || user.getPreferredRegion() != null ||
+                user.getBudgetMin() != null || user.getBudgetMax() != null ||
+                stateService.isFilterTodayOnly(userId);
         if (hasFilters) {
             response.addButtonFullRow("🧹 Очистить фильтры", "clear_filters");
         }
@@ -2950,10 +2980,12 @@ public class BotService {
 
         switch (type) {
             case "created" -> {
+                stateService.setViewingFromInterested(userId, false);
                 elders = elderService.findByCreatedBy(userId);
                 title = "📤 **Переданные заявки**\n\nЗаявки, которые вы создали:";
             }
             case "in_progress" -> {
+                stateService.setViewingFromInterested(userId, false);
                 List<Elder> allInProgress = elderService.findByAssignedOperatorId(userId);
                 elders = allInProgress.stream()
                         .filter(e -> e.getCreatedBy() == null || !e.getCreatedBy().equals(userId))
@@ -2961,6 +2993,9 @@ public class BotService {
                 title = "📋 **Заявки в работе**\n\nЗаявки, которые вы взяли:";
             }
             case "interested" -> {
+                // Устанавливаем флаг, что оператор смотрит из раздела "Интересные заявки"
+                stateService.setViewingFromInterested(userId, true);
+
                 List<OperatorReaction> reactions = reactionRepository
                         .findByOperatorIdAndReaction(userId, "INTERESTED");
                 for (OperatorReaction reaction : reactions) {
@@ -2974,6 +3009,7 @@ public class BotService {
                 title = "⭐ **Интересные заявки**\n\nЗаявки, которые вас заинтересовали:";
             }
             case "completed" -> {
+                stateService.setViewingFromInterested(userId, false);
                 elders = elderService.findByCompletedBy(userId);
                 title = "✅ **Завершённые заявки**\n\nЗаявки, которые вы закрыли:";
             }
@@ -3608,12 +3644,15 @@ public class BotService {
                 title = "📋 **Заявки в работе у оператора " + operator.getFirstName() + "**";
             }
             case "interested" -> {
+                // НЕ СТАВИМ ФЛАГ! Это для директора
                 List<OperatorReaction> reactions = reactionRepository
-                        .findByOperatorIdAndReaction(operator.getTelegramId(), "INTERESTED");
+                        .findByOperatorIdAndReaction(operatorId, "INTERESTED");
                 for (OperatorReaction reaction : reactions) {
                     Elder elder = elderService.findById(reaction.getElderId());
-                    if (elder != null) {
-                        elders.add(elder);
+                    if (elder != null && elder.getAssignedOperatorId() == null) {
+                        if (elder.getCreatedBy() == null || !elder.getCreatedBy().equals(operatorId)) {
+                            elders.add(elder);
+                        }
                     }
                 }
                 title = "⭐ **Интересные заявки оператора " + operator.getFirstName() + "**";
@@ -3727,6 +3766,55 @@ public class BotService {
                         "🙏 Спасибо за работу!\n\n" +
                         "Вы всегда можете зарегистрироваться снова."
         );
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
+    }
+    /**
+     * Возвращает отфильтрованный список заявок для оператора
+     * (исключая уже отмеченные как "Интересные")
+     */
+    private List<Elder> getFilteredEldersForOperator(Long userId) {
+        User user = getUserOrNull(userId);
+        if (user == null) return new ArrayList<>();
+
+        // Получаем ID "Интересных" заявок
+        List<Long> interestedElderIds = reactionRepository.findInterestedElderIdsByOperatorId(userId);
+
+        // Все активные заявки
+        List<Elder> allElders = elderService.findActiveElders();
+
+        return allElders.stream()
+                .filter(elder -> !interestedElderIds.contains(elder.getId()))
+                .filter(elder -> {
+                    // Здесь копируем все фильтры из handleFindRequests
+                    // ... (город, регион, бюджет, дата)
+                    return true; // Временно, для примера
+                })
+                .collect(Collectors.toList());
+    }
+    /**
+     * Убирает заявку из списка "Интересные" для оператора
+     */
+    private UniversalResponse handleRemoveFromInterested(Long userId, Long elderId) {
+        // Проверяем, есть ли реакция — используем Optional правильно
+        Optional<OperatorReaction> reactionOpt = reactionRepository.findByOperatorIdAndElderId(userId, elderId);
+
+        if (reactionOpt.isEmpty()) {
+            return responseWithMainMenu("❌ Этой заявки нет в вашем списке 'Интересных'.");
+        }
+
+        // Получаем реакцию из Optional и удаляем
+        OperatorReaction reaction = reactionOpt.get();
+        reactionRepository.delete(reaction);
+
+        // Сбрасываем флаг, чтобы при следующем просмотре показывались обычные кнопки
+        stateService.setViewingFromInterested(userId, false);
+
+        UniversalResponse response = new UniversalResponse(
+                "⭐ Заявка #" + elderId + " убрана из списка 'Интересных'."
+        );
+        response.addButtonFullRow("⭐ Интересные заявки", "my_requests_interested");
+        response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }

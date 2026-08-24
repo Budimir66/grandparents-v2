@@ -273,4 +273,19 @@ public class UserStateService {
     public void clearTempPurpose(Long userId) {
         tempPurpose.remove(userId);
     }
+    // UserStateService.java
+
+    private final Map<Long, Boolean> viewingFromInterestedMap = new HashMap<>();
+
+    public void setViewingFromInterested(Long userId, boolean isFromInterested) {
+        viewingFromInterestedMap.put(userId, isFromInterested);
+    }
+
+    public boolean isViewingFromInterested(Long userId) {
+        return viewingFromInterestedMap.getOrDefault(userId, false);
+    }
+
+    public void clearViewingFromInterested(Long userId) {
+        viewingFromInterestedMap.remove(userId);
+    }
 }
