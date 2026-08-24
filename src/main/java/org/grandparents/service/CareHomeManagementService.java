@@ -877,7 +877,7 @@ public class CareHomeManagementService {
 
         // ===== КНОПКА РЕГИСТРАЦИИ ОПЕРАТОРА =====
         response.addButtonFullRow("➕ Пригласить оператора", "invite_operator");
-        response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
+      //  response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
