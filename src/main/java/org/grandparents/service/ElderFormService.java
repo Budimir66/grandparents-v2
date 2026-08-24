@@ -481,7 +481,8 @@ public class ElderFormService {
                 UniversalResponse response = new UniversalResponse(
                         "✅ Заявка #" + elder.getId() + " успешно удалена."
                 );
-                response.addButton("📋 Мои заявки", "my_requests");
+                // ❌ УБИРАЕМ "Мои заявки" → заменяем на "Создать заявку"
+                response.addButton("📝 Создать заявку", "new_request");
                 response.addButton("🏠 Главное меню", "main_menu");
                 return response;
             }
@@ -490,7 +491,6 @@ public class ElderFormService {
         stateService.clearState(userId);
         return responseWithBackAndMainMenu("❌ Удаление отменено.", "my_requests");
     }
-
     /**
      * Продление заявки
      */

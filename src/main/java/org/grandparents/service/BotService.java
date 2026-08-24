@@ -2535,7 +2535,7 @@ public class BotService {
     // ===== МЕТОДЫ ДЛЯ РАБОТЫ С ЗАЯВКАМИ (АДМИН) =====
     // ============================================================
 
-    private UniversalResponse handleApproveElder(Long userId, String callbackData) {
+   private UniversalResponse handleApproveElder(Long userId, String callbackData) {
         String elderIdStr = callbackData.substring("approve_elder_".length());
         Long elderId = Long.parseLong(elderIdStr);
         Elder elder = getElderOrNull(elderId);
@@ -2556,11 +2556,17 @@ public class BotService {
             );
         }
 
+        // ===== ОДОБРЯЕМ ЗАЯВКУ =====
         elder.setStatus(ElderStatus.NEW);
         elder.setAcceptedBy(userId);
         elder.setAcceptedAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
+        // ===== РАССЫЛКА ОПЕРАТОРАМ =====
+        notificationService.notifyOperators(elder);
+        log.info("📢 Рассылка операторам отправлена для заявки #{}", elder.getId());
+
+        // ===== УВЕДОМЛЕНИЕ КЛИЕНТА =====
         User client = getUserOrNull(elder.getClientTelegramId());
         if (client != null) {
             sendNotification(client.getTelegramId(),
@@ -2574,6 +2580,7 @@ public class BotService {
 
         UniversalResponse response = new UniversalResponse(
                 "✅ Заявка #" + elderId + " одобрена!\n\n" +
+                        "📢 Уведомления отправлены операторам.\n" +
                         "Клиент получит уведомление."
         );
         response.addButtonFullRow("📋 Модерация заявок", "admin_elder_moderation");
