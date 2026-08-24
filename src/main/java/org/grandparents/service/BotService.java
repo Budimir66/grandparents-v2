@@ -304,7 +304,8 @@ public class BotService {
                     "Выберите действие:");
 
             response.addButtonFullRow("👥 Операторы", "manager_operators");
-            response.addButtonFullRow("⭐ Супер оператор", "super_operator_menu");  // ← НОВАЯ КНОПКА
+            response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");  // ← НОВАЯ КНОПКА
+            response.addButtonFullRow("⭐ Супер оператор", "super_operator_menu");
             response.addButtonFullRow("📊 Статистика", "manager_stats");
             response.addButtonFullRow("❓ Помощь", "help");
             return response;
@@ -3866,12 +3867,10 @@ public class BotService {
             return responseWithMainMenu("❌ Пользователь не найден.");
         }
 
-        // Проверяем, что это действительно менеджер
         if (user.getAccessLevel() != AccessLevel.MANAGER) {
             return responseWithMainMenu("❌ Доступно только для менеджеров.");
         }
 
-        // ===== ФОРМИРУЕМ МЕНЮ ОПЕРАТОРА =====
         UniversalResponse response = new UniversalResponse(
                 "📊 **Режим супер-оператора**\n\n" +
                         "💰 **Ваш баланс:** " + user.getBonusPoints() + " баллов\n" +
@@ -3881,16 +3880,13 @@ public class BotService {
                         "Выберите действие:"
         );
 
-        // ===== ВСЕ КНОПКИ ОПЕРАТОРА =====
+        // ===== ТОЛЬКО ОПЕРАТОРСКИЕ КНОПКИ (БЕЗ "Мои пансионаты") =====
         response.addButtonFullRow("📋 Заявки", "menu_requests");
-        response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
         response.addButtonFullRow("📊 Моя статистика", "my_stats");
         response.addButtonFullRow("👤 Мой профиль", "my_profile");
         response.addButtonFullRow("❓ Помощь", "help");
 
-        // ===== КНОПКА ВОЗВРАТА =====
         response.addButtonFullRow("🔙 Назад в панель менеджера", "main_menu");
-
         return response;
     }
 }
