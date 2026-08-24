@@ -3338,23 +3338,21 @@ public class BotService {
         }
 
         user.setAccessLevel(AccessLevel.OPERATOR);
-        user.setCareHomeId(careHomeId);
-        user.setCreatedBy(invitation.getCreatedBy()); // ← теперь invitation существует!
         user.setRegistered(true);
         user.setRegisteredAt(LocalDateTime.now());
 
+        // ===== ПРИВЯЗКА К ПАНСИОНАТУ =====
+        // Используем careHomeId менеджера, который создал приглашение
+        User manager = userService.findById(invitation.getCreatedBy());
+        if (manager != null && manager.getCareHomeId() != null) {
+            user.setCareHomeId(manager.getCareHomeId());
+        } else {
+            user.setCareHomeId(careHomeId);
+        }
+        user.setCreatedBy(invitation.getCreatedBy());
+
         if (user.getBonusPoints() == 0) {
             user.setBonusPoints(10);
-            // ===== ЗАПИСЬ ТРАНЗАКЦИИ =====
-            BonusTransaction transaction = new BonusTransaction(
-                    user.getId(),
-                    null,
-                    TransactionType.INIT,
-                    10,
-                    "Стартовый бонус",
-                    user.getBonusPoints()
-            );
-            bonusTransactionRepository.save(transaction);
         }
         userService.saveUser(user);
 

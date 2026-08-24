@@ -970,14 +970,13 @@ public class CareHomeManagementService {
         if (user.getAccessLevel() == AccessLevel.ADMIN) {
             isOperatorBelongsToManager = true;
         } else if (user.getCareHomeId() != null && operator.getCareHomeId() != null) {
-            // Просто сравниваем careHomeId
+            // Сравниваем careHomeId менеджера и оператора
             isOperatorBelongsToManager = user.getCareHomeId().equals(operator.getCareHomeId());
         }
 
         if (!isOperatorBelongsToManager) {
             return responseWithMainMenu("❌ Этот оператор не принадлежит вашим пансионатам.");
         }
-
         // ===== ФОРМИРУЕМ КАРТОЧКУ =====
         StringBuilder sb = new StringBuilder();
         sb.append("👤 **Карточка оператора**\n\n");
