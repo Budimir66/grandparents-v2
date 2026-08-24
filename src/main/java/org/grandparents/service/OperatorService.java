@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class OperatorService {
@@ -122,7 +123,13 @@ public class OperatorService {
         if (elder.getAssignedOperatorId() != null) {
             return responseWithMainMenu("❌ Эта заявка уже взята в работу.");
         }
+        List<OperatorReaction> existing = reactionRepository
+                .findAllByOperatorIdAndElderId(userId, elderId);
 
+        if (!existing.isEmpty()) {
+            // Уже есть — ничего не делаем
+            return responseWithMainMenu("⭐ Эта заявка уже у вас в 'Интересных'.");
+        }
         try {
             OperatorReaction reaction = new OperatorReaction();
             reaction.setElderId(elderId);

@@ -2292,7 +2292,7 @@ public class BotService {
             // ===== ЕСЛИ ОПЕРАТОР СМОТРИТ ИЗ "ИНТЕРЕСНЫХ" =====
             if (viewingFromInterested) {
                 // Показываем кнопку "Убрать из интересных"
-                response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
+                response.addButtonFullRow("❌ Убрать из интересных", "remove_from_interested_" + elderId);
             } else {
                 // Обычный режим — показываем стандартные кнопки
                 if (elder.getAssignedOperatorId() == null) {
@@ -3796,22 +3796,25 @@ public class BotService {
      * Убирает заявку из списка "Интересные" для оператора
      */
     private UniversalResponse handleRemoveFromInterested(Long userId, Long elderId) {
-        // Проверяем, есть ли реакция — используем Optional правильно
-        Optional<OperatorReaction> reactionOpt = reactionRepository.findByOperatorIdAndElderId(userId, elderId);
+        // Находим ВСЕ записи для этого оператора и заявки
+        List<OperatorReaction> reactions = reactionRepository
+                .findAllByOperatorIdAndElderId(userId, elderId);
 
-        if (reactionOpt.isEmpty()) {
+        if (reactions.isEmpty()) {
             return responseWithMainMenu("❌ Этой заявки нет в вашем списке 'Интересных'.");
         }
 
-        // Получаем реакцию из Optional и удаляем
-        OperatorReaction reaction = reactionOpt.get();
-        reactionRepository.delete(reaction);
+        // Удаляем ВСЕ найденные записи (включая дубликаты)
+        reactionRepository.deleteAll(reactions);
 
-        // Сбрасываем флаг, чтобы при следующем просмотре показывались обычные кнопки
+        log.info("🗑️ Удалено {} записей 'Интересно' для оператора {} и заявки {}",
+                reactions.size(), userId, elderId);
+
+        // Сбрасываем флаг
         stateService.setViewingFromInterested(userId, false);
 
         UniversalResponse response = new UniversalResponse(
-                "⭐ Заявка #" + elderId + " убрана из списка 'Интересных'."
+                "❌ Заявка #" + elderId + " убрана из списка 'Интересных'."
         );
         response.addButtonFullRow("⭐ Интересные заявки", "my_requests_interested");
         response.addButtonFullRow("🔍 Поиск заявок", "find_requests");

@@ -4,7 +4,10 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "operator_reaction")
+@Table(name = "operator_reaction",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"operator_id", "elder_id"})
+        })
 public class OperatorReaction {
 
     @Id

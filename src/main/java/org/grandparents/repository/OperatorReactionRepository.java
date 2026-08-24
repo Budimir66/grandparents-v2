@@ -22,5 +22,16 @@ public interface OperatorReactionRepository extends JpaRepository<OperatorReacti
     List<Long> findInterestedElderIdsByOperatorId(@Param("operatorId") Long operatorId);
 
     // OperatorReactionRepository.java
-    Optional<OperatorReaction> findByOperatorIdAndElderId(Long operatorId, Long elderId);
+  //  Optional<OperatorReaction> findByOperatorIdAndElderId(Long operatorId, Long elderId);
+    // OperatorReactionRepository.java
+
+    /**
+     * Находит ВСЕ реакции оператора на конкретную заявку
+     * (возвращает список, потому что могут быть дубликаты)
+     */
+    @Query("SELECT r FROM OperatorReaction r WHERE r.operatorId = :operatorId AND r.elderId = :elderId")
+    List<OperatorReaction> findAllByOperatorIdAndElderId(
+            @Param("operatorId") Long operatorId,
+            @Param("elderId") Long elderId
+    );
 }
