@@ -3729,7 +3729,7 @@ public class BotService {
                         "🙏 Спасибо за работу!\n\n" +
                         "Вы всегда можете зарегистрироваться снова."
         );
-        response.addButtonFullRow("📝 Создать заявку", "new_request");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
 }

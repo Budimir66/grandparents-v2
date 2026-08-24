@@ -966,21 +966,18 @@ public class CareHomeManagementService {
 
         // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ПРИНАДЛЕЖИТ ЭТОМУ ПАНСИОНАТУ =====
         boolean isOperatorBelongsToManager = false;
-        if (operator.getCareHomeId() != null) {
-            // Для ADMIN — видит всех
-            if (user.getAccessLevel() == AccessLevel.ADMIN) {
-                isOperatorBelongsToManager = true;
-            } else {
-                // Для MANAGER — используем user.getId(), а не userId!
-                List<CareHome> directorCareHomes = careHomeService.findByProposedBy(user.getId());
-                isOperatorBelongsToManager = directorCareHomes.stream()
-                        .anyMatch(ch -> ch.getId().equals(operator.getCareHomeId()));
-            }
+
+        if (user.getAccessLevel() == AccessLevel.ADMIN) {
+            isOperatorBelongsToManager = true;
+        } else if (user.getCareHomeId() != null && operator.getCareHomeId() != null) {
+            // Просто сравниваем careHomeId
+            isOperatorBelongsToManager = user.getCareHomeId().equals(operator.getCareHomeId());
         }
 
         if (!isOperatorBelongsToManager) {
             return responseWithMainMenu("❌ Этот оператор не принадлежит вашим пансионатам.");
         }
+
         // ===== ФОРМИРУЕМ КАРТОЧКУ =====
         StringBuilder sb = new StringBuilder();
         sb.append("👤 **Карточка оператора**\n\n");
