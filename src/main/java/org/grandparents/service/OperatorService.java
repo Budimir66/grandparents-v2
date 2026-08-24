@@ -42,6 +42,33 @@ public class OperatorService {
     // ============================================================
 
     public UniversalResponse takeElder(Long userId, Long elderId) {
+
+        User user = userService.findByTelegramId(userId).orElse(null);
+        if (user == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
+        // ===== ПРОВЕРКА ПРОФИЛЯ ДЛЯ МЕНЕДЖЕРА =====
+        if (user.getAccessLevel() == AccessLevel.MANAGER) {
+            if (user.getPhone() == null || user.getPhone().isEmpty() ||
+                    user.getFirstName() == null || user.getFirstName().isEmpty()) {
+
+                UniversalResponse response = new UniversalResponse(
+                        "⚠️ **Для работы с заявками необходимо заполнить профиль!**\n\n" +
+                                "Пожалуйста, укажите:\n" +
+                                "📱 **Телефон** (обязательно)\n" +
+                                "👤 **Имя** (обязательно)\n" +
+                                "✈️ Telegram (опционально)\n" +
+                                "📧 Email (опционально)\n\n" +
+                                "Перейдите в 'Мой профиль' и заполните данные."
+                );
+                response.addButtonFullRow("👤 Заполнить профиль", "my_profile");
+                response.addButtonFullRow("🔙 Назад к заявке", "view_elder_" + elderId);
+                response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                return response;
+            }
+        }
+
         Elder elder = elderService.findById(elderId);
         if (elder == null) {
             return responseWithMainMenu("❌ Заявка не найдена.");

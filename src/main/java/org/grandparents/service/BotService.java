@@ -178,7 +178,9 @@ public class BotService {
     }
 
     private boolean isOperator(User user) {
-        return user != null && user.getAccessLevel() == AccessLevel.OPERATOR;
+        return user != null &&
+                (user.getAccessLevel() == AccessLevel.OPERATOR ||
+                        user.getAccessLevel() == AccessLevel.MANAGER);  // ← ДОБАВЛЯЕМ MANAGER
     }
 
     private boolean isGuest(User user) {
@@ -297,13 +299,14 @@ public class BotService {
                     "Вы управляете пансионатом:\n" +
                     "📌 Вы можете регистрировать операторов\n" +
                     "📌 Управлять пансионатом\n" +
-                    "📌 Просматривать статистику\n\n" +
+                    "📌 Просматривать статистику\n" +
+                    "📌 Работать с заявками как супер-оператор\n\n" +
                     "Выберите действие:");
 
             response.addButtonFullRow("👥 Операторы", "manager_operators");
-            response.addButtonFullRow("📋 Заявки", "menu_requests");
+            response.addButtonFullRow("⭐ Супер оператор", "super_operator_menu");  // ← НОВАЯ КНОПКА
             response.addButtonFullRow("📊 Статистика", "manager_stats");
-            response.addButtonFullRow("❓ Помощь", "help");  // ← ТОЛЬКО ОДНА КНОПКА
+            response.addButtonFullRow("❓ Помощь", "help");
             return response;
         }
 
@@ -400,6 +403,11 @@ public class BotService {
 
         if (callbackData.equals("request_contact_from_max")) {
             return handleRequestContactFromMax(userId);
+        }
+
+        // ===== НОВЫЙ БЛОК: СУПЕР ОПЕРАТОР =====
+        if (callbackData.equals("super_operator_menu")) {
+            return handleSuperOperatorMenu(userId);
         }
 
         // ===== УДАЛЕНИЕ АККАУНТА ОПЕРАТОРА =====
@@ -2262,6 +2270,34 @@ public class BotService {
         // ===== ПРОВЕРЯЕМ, ОТКРЫЛ ЛИ ОПЕРАТОР ЗАЯВКУ ИЗ "ИНТЕРЕСНЫХ" =====
         boolean viewingFromInterested = stateService.isViewingFromInterested(userId);
 
+        // ===== ДОБАВЛЯЕМ ПРОВЕРКУ ПРОФИЛЯ ДЛЯ МЕНЕДЖЕРА =====
+        boolean isManager = user != null && user.getAccessLevel() == AccessLevel.MANAGER;
+        isOperator = isOperator(user);
+
+        // Если менеджер пытается взять заявку, но профиль пустой
+        if (isManager && callbackData != null && callbackData.startsWith("take_elder_")) {
+            if (user.getPhone() == null || user.getPhone().isEmpty() ||
+                    user.getFirstName() == null || user.getFirstName().isEmpty()) {
+
+                UniversalResponse profileResponse = new UniversalResponse(
+                        "⚠️ **Для работы с заявками необходимо заполнить профиль!**\n\n" +
+                                "Пожалуйста, укажите:\n" +
+                                "📱 **Телефон** (обязательно)\n" +
+                                "👤 **Имя** (обязательно)\n" +
+                                "✈️ Telegram (опционально)\n" +
+                                "📧 Email (опционально)\n\n" +
+                                "Перейдите в 'Мой профиль' и заполните данные,\n" +
+                                "после чего вернитесь к этой заявке."
+                );
+                profileResponse.addButtonFullRow("👤 Заполнить профиль", "my_profile");
+                profileResponse.addButtonFullRow("🔙 Назад к заявке", "view_elder_" + elderId);
+                profileResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
+                return profileResponse;
+            }
+        }
+
+
+
         // ===== ФОРМИРУЕМ КАРТОЧКУ =====
         String card = "📋 **Заявка #" + elder.getId() + "**\n\n" +
                 "━━━━━━━━━━━━━━━━━━━━━━━\n" +
@@ -3819,6 +3855,42 @@ public class BotService {
         response.addButtonFullRow("⭐ Интересные заявки", "my_requests_interested");
         response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
+    }
+    /**
+     * Показывает меню оператора для менеджера (режим "Супер оператор")
+     */
+    private UniversalResponse handleSuperOperatorMenu(Long userId) {
+        User user = getUserOrNull(userId);
+        if (user == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
+        // Проверяем, что это действительно менеджер
+        if (user.getAccessLevel() != AccessLevel.MANAGER) {
+            return responseWithMainMenu("❌ Доступно только для менеджеров.");
+        }
+
+        // ===== ФОРМИРУЕМ МЕНЮ ОПЕРАТОРА =====
+        UniversalResponse response = new UniversalResponse(
+                "📊 **Режим супер-оператора**\n\n" +
+                        "💰 **Ваш баланс:** " + user.getBonusPoints() + " баллов\n" +
+                        "📨 **Новых заявок:** " + elderService.countActiveElders() + "\n\n" +
+                        "💡 Вы можете работать с заявками как оператор.\n" +
+                        "📌 Для взятия заявки потребуется заполнить профиль.\n\n" +
+                        "Выберите действие:"
+        );
+
+        // ===== ВСЕ КНОПКИ ОПЕРАТОРА =====
+        response.addButtonFullRow("📋 Заявки", "menu_requests");
+        response.addButtonFullRow("🏢 Мои пансионаты", "my_carehomes");
+        response.addButtonFullRow("📊 Моя статистика", "my_stats");
+        response.addButtonFullRow("👤 Мой профиль", "my_profile");
+        response.addButtonFullRow("❓ Помощь", "help");
+
+        // ===== КНОПКА ВОЗВРАТА =====
+        response.addButtonFullRow("🔙 Назад в панель менеджера", "main_menu");
+
         return response;
     }
 }
