@@ -1303,7 +1303,14 @@ public class BotService {
                     return responseWithMainMenu("❌ Заявка не найдена.");
                 }
 
-                // ===== ОПРЕДЕЛЯЕМ АВТОРА =====
+                // ===== ПОЛУЧАЕМ ВНУТРЕННИЙ ID ПОЛЬЗОВАТЕЛЯ =====
+                User complainant = userService.findByTelegramId(userId).orElse(null);
+                if (complainant == null) {
+                    stateService.clearState(userId);
+                    return responseWithMainMenu("❌ Пользователь не найден.");
+                }
+
+                // ===== ОПРЕДЕЛЯЕМ АВТОРА (ВНУТРЕННИЙ ID) =====
                 Long targetId = elder.getCreatedBy();
                 String targetName = "Неизвестный (автор не найден)";
 
@@ -1316,8 +1323,7 @@ public class BotService {
 
                 // ===== СОХРАНЯЕМ ЖАЛОБУ =====
                 Complaint complaint = new Complaint();
-                complaint.setComplainantId(userId);
-                // Если автора нет, ставим 0 (или null)
+                complaint.setComplainantId(complainant.getId());  // ← ВНУТРЕННИЙ ID!
                 complaint.setTargetId(targetId != null ? targetId : 0L);
                 complaint.setElderId(elder.getId());
                 complaint.setReason(text != null ? text : "Без причины");
@@ -3998,7 +4004,7 @@ public class BotService {
             return;
         }
 
-        // ===== ПОЛУЧАЕМ ДАННЫЕ =====
+        // ===== ПОЛУЧАЕМ ДАННЫЕ (используем внутренние ID) =====
         User complainant = userService.findById(complaint.getComplainantId());
         Elder elder = elderService.findById(complaint.getElderId());
 
