@@ -5,7 +5,9 @@ import org.grandparents.dto.UniversalMessage;
 import org.grandparents.dto.UniversalResponse;
 import org.grandparents.model.*;
 import org.grandparents.repository.BonusTransactionRepository;
+import org.grandparents.repository.ComplaintRepository;
 import org.grandparents.repository.OperatorReactionRepository;
+import org.grandparents.repository.RatingRepository;
 import org.grandparents.statemachine.DialogState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +43,9 @@ public class BotService {
     private final StatisticsService statisticsService;
     private final InvitationService invitationService;
     private final BonusTransactionRepository bonusTransactionRepository;
+    private final ComplaintRepository complaintRepository;
+    private final RatingRepository ratingRepository;
+    private final RatingService ratingService;
 
     public BotService(UserService userService,
                       ElderService elderService,
@@ -59,7 +64,10 @@ public class BotService {
                       OperatorService operatorService,
                       StatisticsService statisticsService,
                       InvitationService invitationService,
-                      BonusTransactionRepository bonusTransactionRepository) {
+                      BonusTransactionRepository bonusTransactionRepository,
+                      ComplaintRepository complaintRepository,
+                      RatingRepository ratingRepository,
+                      RatingService ratingService) {
         this.userService = userService;
         this.elderService = elderService;
         this.careHomeService = careHomeService;
@@ -78,6 +86,9 @@ public class BotService {
         this.statisticsService = statisticsService;
         this.invitationService = invitationService;
         this.bonusTransactionRepository = bonusTransactionRepository;
+        this.complaintRepository = complaintRepository;
+        this.ratingRepository = ratingRepository;
+        this.ratingService = ratingService;
     }
 
     // ============================================================
@@ -404,6 +415,34 @@ public class BotService {
 
         if (callbackData.equals("request_contact_from_max")) {
             return handleRequestContactFromMax(userId);
+        }
+// ===== ЖАЛОБА =====
+        if (callbackData.startsWith("complaint_")) {
+            String elderIdStr = callbackData.substring("complaint_".length());
+            Long elderId = Long.parseLong(elderIdStr);
+            return handleComplaint(userId, elderId);
+        }
+
+        // ===== ВЫБОР ЗВЁЗД ДЛЯ ОЦЕНКИ =====
+        if (callbackData.startsWith("rate_stars_")) {
+            // Формат: rate_stars_1_12 (где 1 — количество звёзд, 12 — elderId)
+            String[] parts = callbackData.split("_");
+            if (parts.length < 4) {
+                return responseWithMainMenu("❌ Ошибка формата оценки.");
+            }
+            try {
+                int stars = Integer.parseInt(parts[2]);
+                Long elderId = Long.parseLong(parts[3]);
+                return handleSaveRating(userId, elderId, stars);
+            } catch (NumberFormatException e) {
+                return responseWithMainMenu("❌ Ошибка формата оценки.");
+            }
+        }
+        // ===== ОЦЕНКА АВТОРА =====
+        if (callbackData.startsWith("rate_author_")) {
+            String elderIdStr = callbackData.substring("rate_author_".length());
+            Long elderId = Long.parseLong(elderIdStr);
+            return handleRateAuthor(userId, elderId);
         }
 
         // ===== НОВЫЙ БЛОК: СУПЕР ОПЕРАТОР =====
@@ -1258,7 +1297,36 @@ public class BotService {
                  AWAITING_OPERATOR_PROFILE_EMAIL -> {
                 return handleOperatorProfile(userId, text, state);
             }
+            case AWAITING_COMPLAINT_REASON -> {
+                Elder elder = stateService.getTempElder(userId);
+                if (elder == null) {
+                    return responseWithMainMenu("❌ Заявка не найдена.");
+                }
 
+                // Сохраняем жалобу
+                Complaint complaint = new Complaint();
+                complaint.setComplainantId(userId);
+                complaint.setTargetId(elder.getCreatedBy());
+                complaint.setElderId(elder.getId());
+                complaint.setReason(text);
+                complaint.setStatus("PENDING");
+                complaint.setCreatedAt(LocalDateTime.now());
+                complaintRepository.save(complaint);
+
+                // Уведомляем администраторов
+                notifyAdminsAboutComplaint(complaint);
+
+                stateService.clearState(userId);
+
+                response = new UniversalResponse(
+                        "✅ **Жалоба отправлена администратору.**\n\n" +
+                                "Номер жалобы: #" + complaint.getId() + "\n" +
+                                "Администратор рассмотрит её в ближайшее время."
+                );
+                response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
+                response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                return response;
+            }
             case EDITING_PROFILE_NAME -> {
                 user = getUserOrNull(userId);
                 if (user == null) {
@@ -2271,34 +2339,6 @@ public class BotService {
         // ===== ПРОВЕРЯЕМ, ОТКРЫЛ ЛИ ОПЕРАТОР ЗАЯВКУ ИЗ "ИНТЕРЕСНЫХ" =====
         boolean viewingFromInterested = stateService.isViewingFromInterested(userId);
 
-        // ===== ДОБАВЛЯЕМ ПРОВЕРКУ ПРОФИЛЯ ДЛЯ МЕНЕДЖЕРА =====
-        boolean isManager = user != null && user.getAccessLevel() == AccessLevel.MANAGER;
-        isOperator = isOperator(user);
-
-        // Если менеджер пытается взять заявку, но профиль пустой
-        if (isManager && callbackData != null && callbackData.startsWith("take_elder_")) {
-            if (user.getPhone() == null || user.getPhone().isEmpty() ||
-                    user.getFirstName() == null || user.getFirstName().isEmpty()) {
-
-                UniversalResponse profileResponse = new UniversalResponse(
-                        "⚠️ **Для работы с заявками необходимо заполнить профиль!**\n\n" +
-                                "Пожалуйста, укажите:\n" +
-                                "📱 **Телефон** (обязательно)\n" +
-                                "👤 **Имя** (обязательно)\n" +
-                                "✈️ Telegram (опционально)\n" +
-                                "📧 Email (опционально)\n\n" +
-                                "Перейдите в 'Мой профиль' и заполните данные,\n" +
-                                "после чего вернитесь к этой заявке."
-                );
-                profileResponse.addButtonFullRow("👤 Заполнить профиль", "my_profile");
-                profileResponse.addButtonFullRow("🔙 Назад к заявке", "view_elder_" + elderId);
-                profileResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
-                return profileResponse;
-            }
-        }
-
-
-
         // ===== ФОРМИРУЕМ КАРТОЧКУ =====
         String card = "📋 **Заявка #" + elder.getId() + "**\n\n" +
                 "━━━━━━━━━━━━━━━━━━━━━━━\n" +
@@ -2322,14 +2362,14 @@ public class BotService {
         }
         card += "━━━━━━━━━━━━━━━━━━━━━━━";
 
+        // ===== СОЗДАЁМ ОТВЕТ =====
         UniversalResponse response = new UniversalResponse(card);
 
         // ===== КНОПКИ ДЛЯ ОПЕРАТОРА =====
         if (isOperator && !isAuthor) {
             // ===== ЕСЛИ ОПЕРАТОР СМОТРИТ ИЗ "ИНТЕРЕСНЫХ" =====
             if (viewingFromInterested) {
-                // Показываем кнопку "Убрать из интересных"
-                response.addButtonFullRow("❌ Убрать из интересных", "remove_from_interested_" + elderId);
+                response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
             } else {
                 // Обычный режим — показываем стандартные кнопки
                 if (elder.getAssignedOperatorId() == null) {
@@ -2341,6 +2381,13 @@ public class BotService {
                 }
             }
 
+            // ===== НОВАЯ КНОПКА: ПОЖАЛОВАТЬСЯ =====
+            if (elder.getStatus() != ElderStatus.COMPLETED &&
+                    elder.getStatus() != ElderStatus.DELETED &&
+                    elder.getStatus() != ElderStatus.EXPIRED) {
+                response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
+            }
+
             // Кнопка "Связаться через MAX" (если заявка в работе)
             if (isAssigned && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
@@ -2348,7 +2395,16 @@ public class BotService {
             }
         }
 
-        // ===== КНОПКИ ДЛЯ АВТОРА (КЛИЕНТА) =====
+        // ===== ЕСЛИ ОПЕРАТОР ЗАВЕРШИЛ ЗАЯВКУ — ПОКАЗАТЬ КНОПКУ ДЛЯ ОЦЕНКИ =====
+        if (isOperator && isAssigned && elder.getStatus() == ElderStatus.COMPLETED) {
+            // Проверяем, не оценил ли уже оператор эту заявку
+            boolean alreadyRated = ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent();
+            if (!alreadyRated) {
+                response.addButtonFullRow("⭐ Оценить автора", "rate_author_" + elderId);
+            }
+        }
+
+        // ===== КНОПКИ ДЛЯ АВТОРА =====
         if (isAuthor) {
             if (elder.getAssignedOperatorId() == null) {
                 if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
@@ -2361,7 +2417,6 @@ public class BotService {
         }
 
         // ===== ОБЩИЕ КНОПКИ =====
-        // Если смотрели из "Интересных", возвращаем туда же
         if (viewingFromInterested) {
             response.addButtonFullRow("⭐ Интересные заявки", "my_requests_interested");
         } else {
@@ -3887,6 +3942,186 @@ public class BotService {
         response.addButtonFullRow("❓ Помощь", "help");
 
         response.addButtonFullRow("🔙 Назад в панель менеджера", "main_menu");
+        return response;
+    }
+    // Метод для обработки жалобы
+    private UniversalResponse handleComplaint(Long userId, Long elderId) {
+        Elder elder = elderService.findById(elderId);
+        if (elder == null) {
+            return responseWithMainMenu("❌ Заявка не найдена.");
+        }
+
+        // Проверяем, что пользователь — оператор
+        User user = getUserOrNull(userId);
+        if (!isOperator(user)) {
+            return responseWithMainMenu("❌ Только операторы могут жаловаться.");
+        }
+
+        // Проверяем, что пользователь не автор
+        if (elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId)) {
+            return responseWithMainMenu("❌ Вы не можете пожаловаться на свою заявку.");
+        }
+
+        // Сохраняем заявку в состоянии для ввода причины
+        stateService.setTempElder(userId, elder);
+        stateService.setState(userId, DialogState.AWAITING_COMPLAINT_REASON);
+
+        UniversalResponse response = new UniversalResponse(
+                "🚨 **Жалоба на заявку #" + elderId + "**\n\n" +
+                        "Опишите причину жалобы (кратко):\n" +
+                        "Например: 'Фейковая заявка', 'Клиент не существует' и т.д."
+        );
+        response.addButton("❌ Отменить", "cancel_action");
+        return response;
+    }
+    private void notifyAdminsAboutComplaint(Complaint complaint) {
+        List<User> admins = userService.findByAccessLevel(AccessLevel.ADMIN);
+        if (admins.isEmpty()) {
+            log.warn("⚠️ Нет администраторов для уведомления о жалобе");
+            return;
+        }
+
+        // ПОЛУЧАЕМ ДАННЫЕ — БЕЗ .orElse(null)!
+        User complainant = userService.findById(complaint.getComplainantId());
+        User target = userService.findById(complaint.getTargetId());
+        Elder elder = elderService.findById(complaint.getElderId());
+
+        if (elder == null) {
+            log.warn("⚠️ Заявка #{} не найдена для жалобы", complaint.getElderId());
+            return;
+        }
+
+        String message = "🚨 **Новая жалоба!**\n\n" +
+                "📋 **Заявка #" + elder.getId() + "**\n" +
+                "👤 **Жалобу подал:** " + (complainant != null ? complainant.getFirstName() : "Неизвестный") + "\n" +
+                "👤 **На кого жалуются:** " + (target != null ? target.getFirstName() : "Неизвестный") + "\n" +
+                "💬 **Причина:** " + complaint.getReason() + "\n\n" +
+                "Выберите действие:";
+
+        UniversalResponse response = new UniversalResponse(message);
+        response.addButtonFullRow("🔍 Посмотреть заявку", "view_elder_" + elder.getId());
+        response.addButtonFullRow("⚙️ Админ-панель", "admin_menu");
+
+        for (User admin : admins) {
+            try {
+                Long chatId = admin.getChatId() != null ? admin.getChatId() : admin.getTelegramId();
+                messageSender.sendMessage(chatId, response);
+                log.info("📨 Жалоба отправлена администратору {}", admin.getTelegramId());
+            } catch (Exception e) {
+                log.error("❌ Ошибка отправки жалобы администратору {}: {}", admin.getTelegramId(), e.getMessage());
+            }
+        }
+    }
+    /**
+     * Показывает варианты оценки автора (1–5 звёзд)
+     */
+    private UniversalResponse handleRateAuthor(Long userId, Long elderId) {
+        Elder elder = elderService.findById(elderId);
+        if (elder == null) {
+            return responseWithMainMenu("❌ Заявка не найдена.");
+        }
+
+        // Проверяем, что заявка завершена
+        if (elder.getStatus() != ElderStatus.COMPLETED) {
+            return responseWithMainMenu("❌ Оценить автора можно только после завершения заявки.");
+        }
+
+        // Проверяем, что пользователь — оператор, который вёл заявку
+        if (elder.getAssignedOperatorId() == null || !elder.getAssignedOperatorId().equals(userId)) {
+            return responseWithMainMenu("❌ Вы не вели эту заявку.");
+        }
+
+        // Проверяем, что автор существует
+        User author = userService.findById(elder.getCreatedBy());
+        if (author == null) {
+            return responseWithMainMenu("❌ Автор заявки не найден.");
+        }
+
+        // Проверяем, не оценил ли уже оператор эту заявку
+        if (ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent()) {
+            return responseWithMainMenu("⭐ Вы уже оценили эту заявку.");
+        }
+
+        // Сохраняем заявку в состоянии для оценки
+        stateService.setTempElder(userId, elder);
+        stateService.setState(userId, DialogState.AWAITING_RATING);
+
+        UniversalResponse response = new UniversalResponse(
+                "⭐ **Оцените автора заявки #" + elderId + "**\n\n" +
+                        "👤 **Автор:** " + author.getFirstName() + "\n" +
+                        "📊 **Текущий рейтинг:** " + String.format("%.1f", author.getRating()) + " ⭐\n\n" +
+                        "Выберите оценку (1–5 звёзд):"
+        );
+
+        // Кнопки для оценки (1–5 звёзд)
+        response.addButtonFullRow("⭐ 1 звезда", "rate_stars_1_" + elderId);
+        response.addButtonFullRow("⭐⭐ 2 звезды", "rate_stars_2_" + elderId);
+        response.addButtonFullRow("⭐⭐⭐ 3 звезды", "rate_stars_3_" + elderId);
+        response.addButtonFullRow("⭐⭐⭐⭐ 4 звезды", "rate_stars_4_" + elderId);
+        response.addButtonFullRow("⭐⭐⭐⭐⭐ 5 звёзд", "rate_stars_5_" + elderId);
+
+        response.addButtonFullRow("❌ Отменить", "cancel_action");
+        return response;
+    }
+    /**
+     * Сохраняет оценку автора
+     */
+    private UniversalResponse handleSaveRating(Long userId, Long elderId, int stars) {
+        Elder elder = elderService.findById(elderId);
+        if (elder == null) {
+            return responseWithMainMenu("❌ Заявка не найдена.");
+        }
+
+        // Проверяем, что заявка завершена
+        if (elder.getStatus() != ElderStatus.COMPLETED) {
+            return responseWithMainMenu("❌ Оценить автора можно только после завершения заявки.");
+        }
+
+        // Проверяем, что пользователь — оператор, который вёл заявку
+        if (elder.getAssignedOperatorId() == null || !elder.getAssignedOperatorId().equals(userId)) {
+            return responseWithMainMenu("❌ Вы не вели эту заявку.");
+        }
+
+        // Проверяем, что автор существует
+        User author = userService.findById(elder.getCreatedBy());
+        if (author == null) {
+            return responseWithMainMenu("❌ Автор заявки не найден.");
+        }
+
+        // Проверяем, не оценил ли уже оператор эту заявку
+        if (ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent()) {
+            return responseWithMainMenu("⭐ Вы уже оценили эту заявку.");
+        }
+
+        // Сохраняем оценку через RatingService
+        try {
+            ratingService.addRating(userId, elder.getCreatedBy(), elderId, stars);
+        } catch (IllegalStateException e) {
+            return responseWithMainMenu("❌ " + e.getMessage());
+        }
+
+        // Очищаем состояние
+        stateService.clearState(userId);
+
+        // Формируем ответ
+        String starsEmoji = "⭐".repeat(stars);
+        String message = "✅ **Оценка сохранена!**\n\n" +
+                "👤 **Автор:** " + author.getFirstName() + "\n" +
+                "📊 **Ваша оценка:** " + starsEmoji + " (" + stars + " звёзд" + (stars == 1 ? "а" : "") + ")\n" +
+                "📊 **Новый рейтинг автора:** " + String.format("%.1f", author.getRating()) + " ⭐\n\n";
+
+        if (stars == 5) {
+            message += "🎉 Автор получил +1 балл за отличную заявку!";
+        } else if (stars == 1) {
+            message += "⚠️ Автор потерял 1 балл за низкое качество заявки.";
+        } else {
+            message += "Спасибо за оценку!";
+        }
+
+        UniversalResponse response = new UniversalResponse(message);
+        response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
+        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
 }

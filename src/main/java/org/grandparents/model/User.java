@@ -149,7 +149,11 @@ public class User {
     @Column(name = "created_by")
     private Long createdBy;
 
+    @Column(name = "rating")
+    private Double rating = 0.0;
 
+    @Column(name = "total_ratings")
+    private Integer totalRatings = 0;
 
     // ===== КОНСТРУКТОРЫ =====
     public User() {
@@ -199,6 +203,29 @@ public class User {
 
     public void setTotalRevenue(Double totalRevenue) {
         this.totalRevenue = totalRevenue;
+    }
+
+    public Double getRating() {
+        return rating != null ? rating : 0.0;
+    }
+
+    public void setRating(Double rating) {
+        this.rating = rating;
+    }
+
+    public Integer getTotalRatings() {
+        return totalRatings != null ? totalRatings : 0;
+    }
+
+    public void setTotalRatings(Integer totalRatings) {
+        this.totalRatings = totalRatings;
+    }
+
+    public void incrementTotalRatings() {
+        if (this.totalRatings == null) {
+            this.totalRatings = 0;
+        }
+        this.totalRatings++;
     }
 
 

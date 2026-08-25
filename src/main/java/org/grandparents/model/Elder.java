@@ -44,7 +44,7 @@ public class Elder {
     private ElderStatus status;
 
     @Column(name = "is_anonymous")
-    private boolean isAnonymous;
+    private boolean isAnonymous = false;
 
     // ===== ПОЛЯ ДЛЯ ОПЕРАТОРОВ =====
     @Column(name = "created_by")
