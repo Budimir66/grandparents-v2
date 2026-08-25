@@ -1303,12 +1303,25 @@ public class BotService {
                     return responseWithMainMenu("❌ Заявка не найдена.");
                 }
 
+                // ===== ПРОВЕРЯЕМ, ЧТО У ЗАЯВКИ ЕСТЬ АВТОР =====
+                Long targetId = elder.getCreatedBy();
+                if (targetId == null) {
+                    stateService.clearState(userId);
+                    return responseWithMainMenu("❌ У этой заявки нет автора. Жалоба невозможна.");
+                }
+
+                // ===== НЕЛЬЗЯ ЖАЛОВАТЬСЯ НА СЕБЯ =====
+                if (targetId.equals(userId)) {
+                    stateService.clearState(userId);
+                    return responseWithMainMenu("❌ Вы не можете пожаловаться на свою заявку.");
+                }
+
                 // Сохраняем жалобу
                 Complaint complaint = new Complaint();
                 complaint.setComplainantId(userId);
-                complaint.setTargetId(elder.getCreatedBy());
+                complaint.setTargetId(targetId);  // ← теперь точно не null
                 complaint.setElderId(elder.getId());
-                complaint.setReason(text);
+                complaint.setReason(text != null ? text : "Без причины");
                 complaint.setStatus("PENDING");
                 complaint.setCreatedAt(LocalDateTime.now());
                 complaintRepository.save(complaint);
@@ -1320,10 +1333,13 @@ public class BotService {
 
                 response = new UniversalResponse(
                         "✅ **Жалоба отправлена администратору.**\n\n" +
-                                "Номер жалобы: #" + complaint.getId() + "\n" +
-                                "Администратор рассмотрит её в ближайшее время."
+                                "📋 **Номер жалобы:** #" + complaint.getId() + "\n" +
+                                "👤 **На кого жалуются:** " + getUserOrNull(targetId).getFirstName() + "\n" +
+                                "💬 **Причина:** " + complaint.getReason() + "\n\n" +
+                                "Администратор рассмотрит жалобу в ближайшее время."
                 );
                 response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
+                response.addButtonFullRow("📋 Мои заявки", "my_requests");
                 response.addButtonFullRow("🏠 Главное меню", "main_menu");
                 return response;
             }
@@ -3981,7 +3997,7 @@ public class BotService {
             return;
         }
 
-        // ПОЛУЧАЕМ ДАННЫЕ — БЕЗ .orElse(null)!
+        // ===== ПОЛУЧАЕМ ДАННЫЕ =====
         User complainant = userService.findById(complaint.getComplainantId());
         User target = userService.findById(complaint.getTargetId());
         Elder elder = elderService.findById(complaint.getElderId());
@@ -3991,10 +4007,13 @@ public class BotService {
             return;
         }
 
+        String complainantName = complainant != null ? complainant.getFirstName() : "Неизвестный";
+        String targetName = target != null ? target.getFirstName() : "Неизвестный";
+
         String message = "🚨 **Новая жалоба!**\n\n" +
                 "📋 **Заявка #" + elder.getId() + "**\n" +
-                "👤 **Жалобу подал:** " + (complainant != null ? complainant.getFirstName() : "Неизвестный") + "\n" +
-                "👤 **На кого жалуются:** " + (target != null ? target.getFirstName() : "Неизвестный") + "\n" +
+                "👤 **Жалобу подал:** " + complainantName + "\n" +
+                "👤 **На кого жалуются:** " + targetName + "\n" +
                 "💬 **Причина:** " + complaint.getReason() + "\n\n" +
                 "Выберите действие:";
 
