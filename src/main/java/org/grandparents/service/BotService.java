@@ -1303,41 +1303,42 @@ public class BotService {
                     return responseWithMainMenu("❌ Заявка не найдена.");
                 }
 
-                // ===== ПРОВЕРЯЕМ, ЧТО У ЗАЯВКИ ЕСТЬ АВТОР =====
+                // ===== ОПРЕДЕЛЯЕМ АВТОРА =====
                 Long targetId = elder.getCreatedBy();
-                if (targetId == null) {
-                    stateService.clearState(userId);
-                    return responseWithMainMenu("❌ У этой заявки нет автора. Жалоба невозможна.");
+                String targetName = "Неизвестный (автор не найден)";
+
+                if (targetId != null) {
+                    User target = userService.findById(targetId);
+                    if (target != null) {
+                        targetName = target.getFirstName();
+                    }
                 }
 
-                // ===== НЕЛЬЗЯ ЖАЛОВАТЬСЯ НА СЕБЯ =====
-                if (targetId.equals(userId)) {
-                    stateService.clearState(userId);
-                    return responseWithMainMenu("❌ Вы не можете пожаловаться на свою заявку.");
-                }
-
-                // Сохраняем жалобу
+                // ===== СОХРАНЯЕМ ЖАЛОБУ =====
                 Complaint complaint = new Complaint();
                 complaint.setComplainantId(userId);
-                complaint.setTargetId(targetId);  // ← теперь точно не null
+                // Если автора нет, ставим 0 (или null)
+                complaint.setTargetId(targetId != null ? targetId : 0L);
                 complaint.setElderId(elder.getId());
                 complaint.setReason(text != null ? text : "Без причины");
                 complaint.setStatus("PENDING");
                 complaint.setCreatedAt(LocalDateTime.now());
                 complaintRepository.save(complaint);
 
-                // Уведомляем администраторов
+                // ===== УВЕДОМЛЯЕМ АДМИНИСТРАТОРОВ =====
                 notifyAdminsAboutComplaint(complaint);
 
                 stateService.clearState(userId);
 
-                response = new UniversalResponse(
-                        "✅ **Жалоба отправлена администратору.**\n\n" +
-                                "📋 **Номер жалобы:** #" + complaint.getId() + "\n" +
-                                "👤 **На кого жалуются:** " + getUserOrNull(targetId).getFirstName() + "\n" +
-                                "💬 **Причина:** " + complaint.getReason() + "\n\n" +
-                                "Администратор рассмотрит жалобу в ближайшее время."
-                );
+                // ===== ОТВЕТ ПОЛЬЗОВАТЕЛЮ =====
+                String responseText = "✅ **Жалоба отправлена администратору.**\n\n" +
+                        "📋 **Номер жалобы:** #" + complaint.getId() + "\n" +
+                        "📋 **Заявка #" + elder.getId() + "**\n" +
+                        "👤 **Автор:** " + targetName + "\n" +
+                        "💬 **Причина:** " + complaint.getReason() + "\n\n" +
+                        "Администратор рассмотрит жалобу в ближайшее время.";
+
+                response = new UniversalResponse(responseText);
                 response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
                 response.addButtonFullRow("📋 Мои заявки", "my_requests");
                 response.addButtonFullRow("🏠 Главное меню", "main_menu");
@@ -3999,7 +4000,6 @@ public class BotService {
 
         // ===== ПОЛУЧАЕМ ДАННЫЕ =====
         User complainant = userService.findById(complaint.getComplainantId());
-        User target = userService.findById(complaint.getTargetId());
         Elder elder = elderService.findById(complaint.getElderId());
 
         if (elder == null) {
@@ -4007,8 +4007,17 @@ public class BotService {
             return;
         }
 
+        // ===== ОПРЕДЕЛЯЕМ АВТОРА =====
+        String targetName = "Неизвестный (автор не найден)";
+        Long targetId = complaint.getTargetId();
+        if (targetId != null && targetId != 0L) {
+            User target = userService.findById(targetId);
+            if (target != null) {
+                targetName = target.getFirstName();
+            }
+        }
+
         String complainantName = complainant != null ? complainant.getFirstName() : "Неизвестный";
-        String targetName = target != null ? target.getFirstName() : "Неизвестный";
 
         String message = "🚨 **Новая жалоба!**\n\n" +
                 "📋 **Заявка #" + elder.getId() + "**\n" +
