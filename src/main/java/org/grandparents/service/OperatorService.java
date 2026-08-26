@@ -64,37 +64,32 @@ public class OperatorService {
             return responseWithMainMenu("❌ Эта заявка уже завершена или удалена.");
         }
 
-        // ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
-        // ===== ГЛАВНОЕ: СОХРАНЯЕМ ОПЕРАТОРА В assigned_operator_ids =====
-        // ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+        // ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+        // ===== ГЛАВНОЕ: ДОБАВЛЯЕМ ОПЕРАТОРА В assigned_operator_ids =====
+        // ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
         String currentIds = elder.getAssignedOperatorIds();
         if (currentIds == null || currentIds.isEmpty()) {
             elder.setAssignedOperatorIds(String.valueOf(userId));
-            log.info("📝 [takeElder] Заявка #{}: установлен первый оператор {}", elderId, userId);
         } else {
-            List<String> ids = Arrays.asList(currentIds.split(","));
-            if (!ids.contains(String.valueOf(userId))) {
+            // Проверяем, не добавлен ли уже
+            if (!currentIds.contains(String.valueOf(userId))) {
                 elder.setAssignedOperatorIds(currentIds + "," + userId);
-                log.info("📝 [takeElder] Заявка #{}: добавлен оператор {} в список {}", elderId, userId, elder.getAssignedOperatorIds());
-            } else {
-                log.info("📝 [takeElder] Заявка #{}: оператор {} уже в списке", elderId, userId);
             }
         }
 
-        // ===== МЕНЯЕМ СТАТУС НА IN_PROGRESS (ЕСЛИ ЕЩЁ НЕ В РАБОТЕ) =====
+        // ===== МЕНЯЕМ СТАТУС НА IN_PROGRESS =====
         if (elder.getStatus() == ElderStatus.NEW) {
             elder.setStatus(ElderStatus.IN_PROGRESS);
         }
         elder.setTakenAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
-        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ (ТОЛЬКО ПРИ ПЕРВОМ ВЗЯТИИ) =====
+        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ =====
         if (elder.getBonusPointsAwarded() == null || !elder.getBonusPointsAwarded()) {
             User author = userService.findById(elder.getCreatedBy());
             if (author != null) {
                 author.addBonusPoints(-1);
                 userService.saveUser(author);
-                log.info("📊 У автора {} списано 1 балл за заявку #{}", author.getId(), elderId);
                 elder.setBonusPointsAwarded(true);
                 elderService.updateElder(elder);
             }
@@ -114,7 +109,7 @@ public class OperatorService {
             }
         }
 
-        // ===== ОТВЕТ ОПЕРАТОРУ =====
+        // ===== ОТВЕТ ОПЕРАТОРУ (ТОЛЬКО ОДИН РАЗ!) =====
         UniversalResponse response = new UniversalResponse(
                 "✅ **Заявка #" + elderId + " взята в работу!**\n\n" +
                         "💡 Контакты клиента теперь доступны.\n" +
