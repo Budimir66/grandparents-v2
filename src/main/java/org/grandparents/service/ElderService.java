@@ -227,6 +227,10 @@ public class ElderService {
             }
         }
     }
-
+    public List<Elder> findActiveEldersSortedByDate() {
+        return elderRepository.findByStatusNotInOrderByCreatedAtDesc(
+                List.of(ElderStatus.COMPLETED, ElderStatus.DELETED, ElderStatus.EXPIRED)
+        );
+    }
 
 }

@@ -43,4 +43,6 @@ public interface ElderRepository extends JpaRepository<Elder, Long> {
 
     @Query("SELECT COUNT(e) FROM Elder e WHERE e.status IN :statuses")
     long countActiveElders(@Param("statuses") List<ElderStatus> statuses);
+    // ElderRepository.java
+    List<Elder> findByStatusNotInOrderByCreatedAtDesc(List<ElderStatus> statuses);
 }

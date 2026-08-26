@@ -660,7 +660,7 @@ public class BotService {
             } else if (user != null && user.getAccessLevel() == AccessLevel.OPERATOR) {
                 tempElder.setCreatedBy(userId);
                 tempElder.setCareHomeId(user.getCareHomeId());
-                tempElder.setStatus(ElderStatus.OFFERED);
+                tempElder.setStatus(ElderStatus.NEW);
             } else {
                 tempElder.setStatus(ElderStatus.NEW);
             }
@@ -2855,6 +2855,11 @@ public class BotService {
 
         // ===== 2. Получаем все активные заявки, исключая уже "Интересные" =====
         List<Elder> allElders = elderService.findActiveElders();
+
+        // ===== СОРТИРУЕМ: НОВЫЕ СВЕРХУ =====
+        allElders = allElders.stream()
+                .sorted((e1, e2) -> e2.getCreatedAt().compareTo(e1.getCreatedAt()))
+                .collect(Collectors.toList());
 
         // Фильтруем: исключаем заявки, которые уже в "Интересных" у этого оператора
         List<Elder> filteredElders = allElders.stream()
