@@ -288,8 +288,6 @@ public class OperatorService {
                 "Оператор " + operator.getFirstName() + " сообщает, что ваш подопечный **" + elder.getFullName() +
                 "** заселился в пансионат **" + careHomeName + "**.\n\n" +
                 "Подтвердите закрытие заявки.\n\n" +
-                "💰 Оператор получит +5 баллов.\n" +
-                (isAuthorOperator ? "📌 Вы получите +3 балла как автор заявки.\n\n" : "") +
                 "Подтверждаете?";
 
         UniversalResponse notifyResponse = new UniversalResponse(notificationText);
@@ -338,15 +336,31 @@ public class OperatorService {
 
         // ===== ПРОВЕРЯЕМ ПРАВА =====
         boolean isAuthor = elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId);
-        boolean isClient = elder.getClientTelegramId().equals(userId);
+        boolean isClient = elder.getClientTelegramId() != null && elder.getClientTelegramId().equals(userId);
         boolean isOperator = elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId);
 
         if (!isAuthor && !isClient && !isOperator) {
             return responseWithMainMenu("❌ Вы не можете закрыть эту заявку.");
         }
 
-        // ===== СОХРАНЯЕМ ID ОПЕРАТОРА, КОТОРЫЙ ИНИЦИИРОВАЛ ЗАКРЫТИЕ =====
-        Long requestingOperatorId = elder.getAssignedOperatorId();
+        // ===== ОПРЕДЕЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ИНИЦИИРОВАЛ ЗАКРЫТИЕ =====
+        // Берём из assigned_operator_ids (первый оператор, который взял заявку)
+        Long requestingOperatorId = null;
+        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            if (ids.length > 0) {
+                try {
+                    requestingOperatorId = Long.parseLong(ids[0].trim());
+                } catch (NumberFormatException e) {
+                    log.warn("⚠️ Не удалось распарсить ID оператора: {}", ids[0]);
+                }
+            }
+        }
+
+        // Если не нашли в assigned_operator_ids, пробуем через assigned_operator_id (старая модель)
+        if (requestingOperatorId == null && elder.getAssignedOperatorId() != null) {
+            requestingOperatorId = elder.getAssignedOperatorId();
+        }
 
         // ===== ЗАКРЫВАЕМ ЗАЯВКУ =====
         elder.setStatus(ElderStatus.COMPLETED);
@@ -371,7 +385,12 @@ public class OperatorService {
 
                 Long chatId = operator.getChatId() != null ? operator.getChatId() : operator.getTelegramId();
                 messageSender.sendMessage(chatId, notification);
+                log.info("📨 Уведомление отправлено оператору {}", operator.getTelegramId());
             }
+        } else if (requestingOperatorId == null) {
+            log.warn("⚠️ Не удалось определить оператора для уведомления по заявке #{}", elderId);
+        } else if (requestingOperatorId.equals(userId)) {
+            log.info("ℹ️ Оператор {} сам подтвердил закрытие заявки #{}", userId, elderId);
         }
 
         // ===== ОТВЕТ ТОМУ, КТО ПОДТВЕРДИЛ ЗАКРЫТИЕ =====
@@ -386,7 +405,6 @@ public class OperatorService {
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
-
     // ============================================================
     // ===== СВЯЗЬ С КЛИЕНТОМ ЧЕРЕЗ MAX =====
     // ============================================================
@@ -528,8 +546,11 @@ public class OperatorService {
     // ===== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =====
     // ============================================================
 
+   // private User getUserOrNull(Long userId) {
+   //     return userService.findByTelegramId(userId).orElse(null);}
+
     private User getUserOrNull(Long userId) {
-        return userService.findByTelegramId(userId).orElse(null);
+        return userService.findById(userId);
     }
 
     private boolean isOperator(User user) {
