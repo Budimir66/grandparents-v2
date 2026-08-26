@@ -327,16 +327,27 @@ public class OperatorService {
 
     @Transactional
     public UniversalResponse confirmComplete(Long userId, Long elderId) {
+        // ============================================================
+        // ===== ДИАГНОСТИКА =====
+        // ============================================================
+        log.info("🔍 [confirmComplete] НАЧАЛО: userId={}, elderId={}", userId, elderId);
+
         Elder elder = elderService.findById(elderId);
         if (elder == null) {
+            log.warn("⚠️ [confirmComplete] Заявка #{} не найдена!", elderId);
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
+        log.info("🔍 [confirmComplete] Заявка #{}: status={}, assigned_operator_ids='{}', created_by={}",
+                elderId, elder.getStatus(), elder.getAssignedOperatorIds(), elder.getCreatedBy());
+
         // ===== ПРОВЕРЯЕМ, ЧТО ЗАЯВКА НЕ ЗАКРЫТА =====
         if (elder.getStatus() == ElderStatus.COMPLETED) {
+            log.info("ℹ️ [confirmComplete] Заявка #{} уже закрыта", elderId);
             return responseWithMainMenu("✅ Заявка уже закрыта.");
         }
         if (elder.getStatus() == ElderStatus.EXPIRED || elder.getStatus() == ElderStatus.DELETED) {
+            log.info("ℹ️ [confirmComplete] Заявка #{} неактивна", elderId);
             return responseWithMainMenu("❌ Заявка неактивна и не может быть закрыта.");
         }
 
@@ -345,77 +356,91 @@ public class OperatorService {
         boolean isClient = elder.getClientTelegramId() != null && elder.getClientTelegramId().equals(userId);
         boolean isOperator = elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId);
 
+        log.info("🔍 [confirmComplete] isAuthor={}, isClient={}, isOperator={}", isAuthor, isClient, isOperator);
+
         if (!isAuthor && !isClient && !isOperator) {
+            log.warn("⚠️ [confirmComplete] Пользователь {} не имеет прав на закрытие заявки #{}", userId, elderId);
             return responseWithMainMenu("❌ Вы не можете закрыть эту заявку.");
         }
 
         // ============================================================
         // ===== ОПРЕДЕЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ОТПРАВИЛ ЗАПРОС =====
-        // Ищем НЕ автора в assigned_operator_ids
         // ============================================================
         Long requestingOperatorId = null;
         if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
             String[] ids = elder.getAssignedOperatorIds().split(",");
+            log.info("🔍 [confirmComplete] assigned_operator_ids: {}", Arrays.toString(ids));
             for (String id : ids) {
                 Long operatorId = Long.parseLong(id.trim());
                 // Пропускаем автора
                 if (elder.getCreatedBy() != null && elder.getCreatedBy().equals(operatorId)) {
+                    log.info("🔍 [confirmComplete] Пропускаем автора: {}", operatorId);
                     continue;
                 }
                 // Берём первого НЕ автора
                 requestingOperatorId = operatorId;
+                log.info("🔍 [confirmComplete] Найден оператор, отправивший запрос: {}", requestingOperatorId);
                 break;
             }
         }
 
         // Если не нашли в assigned_operator_ids, пробуем через assigned_operator_id (старая модель)
         if (requestingOperatorId == null && elder.getAssignedOperatorId() != null) {
-            // Проверяем, что это не автор
             if (elder.getCreatedBy() == null || !elder.getCreatedBy().equals(elder.getAssignedOperatorId())) {
                 requestingOperatorId = elder.getAssignedOperatorId();
+                log.info("🔍 [confirmComplete] Найден оператор в assigned_operator_id: {}", requestingOperatorId);
             }
         }
+
+        log.info("🔍 [confirmComplete] Итоговый requestingOperatorId: {}", requestingOperatorId);
 
         // ===== ЗАКРЫВАЕМ ЗАЯВКУ =====
         elder.setStatus(ElderStatus.COMPLETED);
         elder.setCompletedBy(userId);
         elder.setCompletedAt(LocalDateTime.now());
         elderService.updateElder(elder);
+        log.info("✅ [confirmComplete] Заявка #{} закрыта", elderId);
 
         // ============================================================
         // ===== УВЕДОМЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ОТПРАВИЛ ЗАПРОС =====
         // ============================================================
-        if (requestingOperatorId != null && !requestingOperatorId.equals(userId)) {
-            User operator = userService.findById(requestingOperatorId);
-            if (operator != null) {
-                // Получаем имя того, кто подтвердил (автор или клиент)
-                String confirmatorName = "Клиент";
-                if (isAuthor) {
-                    User author = userService.findById(userId);
-                    confirmatorName = author != null ? author.getFirstName() : "Автор";
-                } else if (isClient) {
-                    confirmatorName = "Клиент";
+        if (requestingOperatorId != null) {
+            log.info("🔍 [confirmComplete] Пытаемся отправить уведомление оператору {}", requestingOperatorId);
+            if (!requestingOperatorId.equals(userId)) {
+                User operator = userService.findById(requestingOperatorId);
+                if (operator != null) {
+                    log.info("🔍 [confirmComplete] Оператор найден: {}, chatId={}", operator.getFirstName(), operator.getChatId());
+
+                    String confirmatorName = "Клиент";
+                    if (isAuthor) {
+                        User author = userService.findById(userId);
+                        confirmatorName = author != null ? author.getFirstName() : "Автор";
+                    } else if (isClient) {
+                        confirmatorName = "Клиент";
+                    }
+
+                    UniversalResponse notification = new UniversalResponse(
+                            "🎉 **Заявка #" + elderId + " закрыта!**\n\n" +
+                                    "✅ " + confirmatorName + " подтвердил заселение.\n" +
+                                    "📋 **Подопечный:** " + elder.getFullName() + "\n" +
+                                    "🏢 **Пансионат:** " + getCareHomeName(elder.getCareHomeId()) + "\n\n" +
+                                    "📌 Заявка успешно завершена!"
+                    );
+                    notification.addButtonFullRow("📋 Мои заявки", "my_requests");
+                    notification.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                    Long chatId = operator.getChatId() != null ? operator.getChatId() : operator.getTelegramId();
+                    log.info("📨 [confirmComplete] Отправляем уведомление оператору {} в chatId={}", operator.getTelegramId(), chatId);
+                    messageSender.sendMessage(chatId, notification);
+                    log.info("✅ [confirmComplete] Уведомление отправлено оператору {}", operator.getTelegramId());
+                } else {
+                    log.error("❌ [confirmComplete] Оператор {} не найден!", requestingOperatorId);
                 }
-
-                UniversalResponse notification = new UniversalResponse(
-                        "🎉 **Заявка #" + elderId + " закрыта!**\n\n" +
-                                "✅ " + confirmatorName + " подтвердил заселение.\n" +
-                                "📋 **Подопечный:** " + elder.getFullName() + "\n" +
-                                "🏢 **Пансионат:** " + getCareHomeName(elder.getCareHomeId()) + "\n\n" +
-                                "📌 Заявка успешно завершена!"
-                        // Убрали упоминание о баллах
-                );
-                notification.addButtonFullRow("📋 Мои заявки", "my_requests");
-                notification.addButtonFullRow("🏠 Главное меню", "main_menu");
-
-                Long chatId = operator.getChatId() != null ? operator.getChatId() : operator.getTelegramId();
-                messageSender.sendMessage(chatId, notification);
-                log.info("📨 Уведомление отправлено оператору {}", operator.getTelegramId());
+            } else {
+                log.info("ℹ️ [confirmComplete] Оператор {} сам подтвердил закрытие заявки #{}", userId, elderId);
             }
-        } else if (requestingOperatorId == null) {
-            log.warn("⚠️ Не удалось определить оператора для уведомления по заявке #{}", elderId);
-        } else if (requestingOperatorId.equals(userId)) {
-            log.info("ℹ️ Оператор {} сам подтвердил закрытие заявки #{}", userId, elderId);
+        } else {
+            log.warn("⚠️ [confirmComplete] Не удалось определить оператора для уведомления по заявке #{}", elderId);
         }
 
         // ===== ОТВЕТ ТОМУ, КТО ПОДТВЕРДИЛ ЗАКРЫТИЕ =====
