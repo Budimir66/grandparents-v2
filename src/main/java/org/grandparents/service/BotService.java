@@ -385,6 +385,7 @@ public class BotService {
             response.addButton("📋 Модерация заявок", "admin_elder_moderation");
             response.addButton("📊 Общая статистика", "admin_stats");
             response.addButton("💰 Настройка бонусов", "admin_bonus_settings");
+            response.addButton("🚨 Жалобы", "admin_complaints");  // ← НОВАЯ КНОПКА
             response.addButton("🏠 Главное меню", "main_menu");
             return response;
         }
@@ -416,6 +417,26 @@ public class BotService {
         if (callbackData.equals("request_contact_from_max")) {
             return handleRequestContactFromMax(userId);
         }
+
+        // ===== ЖАЛОБЫ (АДМИН) =====
+        if (callbackData.equals("admin_complaints")) {
+            return showComplaintsList(userId);
+        }
+
+// ===== ПРОСМОТР КОНКРЕТНОЙ ЖАЛОБЫ =====
+        if (callbackData.startsWith("admin_view_complaint_")) {
+            String complaintIdStr = callbackData.substring("admin_view_complaint_".length());
+            Long complaintId = Long.parseLong(complaintIdStr);
+            return showComplaintDetails(userId, complaintId);
+        }
+
+// ===== ИЗМЕНЕНИЕ СТАТУСА ЖАЛОБЫ =====
+        if (callbackData.startsWith("admin_resolve_complaint_")) {
+            String complaintIdStr = callbackData.substring("admin_resolve_complaint_".length());
+            Long complaintId = Long.parseLong(complaintIdStr);
+            return resolveComplaint(userId, complaintId);
+        }
+
 // ===== ЖАЛОБА =====
         if (callbackData.startsWith("complaint_")) {
             String elderIdStr = callbackData.substring("complaint_".length());
@@ -4163,5 +4184,175 @@ public class BotService {
         if (userId == null) return "Неизвестный";
         User user = userService.findById(userId);
         return user != null ? user.getFirstName() : "Неизвестный";
+    }
+    /**
+     * Показывает список всех жалоб для администратора
+     */
+    private UniversalResponse showComplaintsList(Long userId) {
+        User admin = getUserOrNull(userId);
+        if (!isAdmin(admin)) {
+            return responseWithMainMenu("❌ Доступ запрещён.");
+        }
+
+        // ===== ПОЛУЧАЕМ ВСЕ ЖАЛОБЫ =====
+        List<Complaint> complaints = complaintRepository.findAllByOrderByCreatedAtDesc();
+
+        if (complaints.isEmpty()) {
+            UniversalResponse response = new UniversalResponse("📭 **Жалоб пока нет.**\n\nВсе чисто! 🎉");
+            response.addButtonFullRow("⚙️ Админ-панель", "admin_menu");
+            response.addButtonFullRow("🏠 Главное меню", "main_menu");
+            return response;
+        }
+
+        // ===== ГРУППИРУЕМ ПО СТАТУСУ =====
+        long pendingCount = complaints.stream().filter(c -> "PENDING".equals(c.getStatus())).count();
+        long reviewedCount = complaints.stream().filter(c -> "REVIEWED".equals(c.getStatus())).count();
+        long resolvedCount = complaints.stream().filter(c -> "RESOLVED".equals(c.getStatus())).count();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("🚨 **Управление жалобами**\n\n");
+        sb.append("📊 **Статистика:**\n");
+        sb.append("   ⏳ Ожидают: ").append(pendingCount).append("\n");
+        sb.append("   👀 Просмотрены: ").append(reviewedCount).append("\n");
+        sb.append("   ✅ Решены: ").append(resolvedCount).append("\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        // ===== ФИЛЬТР: ПОКАЗЫВАЕМ ТОЛЬКО ОЖИДАЮЩИЕ (PENDING) =====
+        List<Complaint> pendingComplaints = complaints.stream()
+                .filter(c -> "PENDING".equals(c.getStatus()))
+                .collect(Collectors.toList());
+
+        if (pendingComplaints.isEmpty()) {
+            sb.append("✅ Новых жалоб нет. Все обработаны!");
+        } else {
+            sb.append("📋 **Новые жалобы (").append(pendingComplaints.size()).append("):**\n\n");
+            for (Complaint complaint : pendingComplaints) {
+                User complainant = userService.findById(complaint.getComplainantId());
+                User target = userService.findById(complaint.getTargetId());
+                Elder elder = elderService.findById(complaint.getElderId());
+
+                String complainantName = complainant != null ? complainant.getFirstName() : "Неизвестный";
+                String targetName = target != null ? target.getFirstName() : "Неизвестный";
+
+                sb.append("🆔 #").append(complaint.getId())
+                        .append(" | 📋 Заявка #").append(complaint.getElderId())
+                        .append(" | 👤 ").append(complainantName)
+                        .append(" → ").append(targetName)
+                        .append("\n");
+                sb.append("   💬 \"").append(complaint.getReason().length() > 30 ? complaint.getReason().substring(0, 30) + "..." : complaint.getReason()).append("\"\n");
+                sb.append("   📅 ").append(complaint.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n");
+                sb.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
+            }
+        }
+
+        UniversalResponse response = new UniversalResponse(sb.toString());
+
+        // ===== КНОПКИ ДЛЯ КАЖДОЙ ЖАЛОБЫ =====
+        for (Complaint complaint : pendingComplaints) {
+            response.addButtonFullRow(
+                    "🔍 Жалоба #" + complaint.getId() + " (Заявка #" + complaint.getElderId() + ")",
+                    "admin_view_complaint_" + complaint.getId()
+            );
+        }
+
+        // ===== КНОПКИ УПРАВЛЕНИЯ =====
+        response.addButtonFullRow("📊 Показать все жалобы", "admin_complaints_all");
+        response.addButtonFullRow("⚙️ Админ-панель", "admin_menu");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
+    }
+    /**
+     * Показывает детали конкретной жалобы
+     */
+    private UniversalResponse showComplaintDetails(Long userId, Long complaintId) {
+        User admin = getUserOrNull(userId);
+        if (!isAdmin(admin)) {
+            return responseWithMainMenu("❌ Доступ запрещён.");
+        }
+
+        Complaint complaint = complaintRepository.findById(complaintId).orElse(null);
+        if (complaint == null) {
+            return responseWithMainMenu("❌ Жалоба не найдена.");
+        }
+
+        User complainant = userService.findById(complaint.getComplainantId());
+        User target = userService.findById(complaint.getTargetId());
+        Elder elder = elderService.findById(complaint.getElderId());
+
+        String complainantName = complainant != null ? complainant.getFirstName() : "Неизвестный";
+        String targetName = target != null ? target.getFirstName() : "Неизвестный";
+
+        String statusEmoji = switch (complaint.getStatus()) {
+            case "PENDING" -> "⏳";
+            case "REVIEWED" -> "👀";
+            case "RESOLVED" -> "✅";
+            default -> "❓";
+        };
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("🚨 **Жалоба #").append(complaint.getId()).append("**\n\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
+        sb.append("📋 **Заявка #** ").append(complaint.getElderId()).append("\n");
+        sb.append("👤 **Подал:** ").append(complainantName).append("\n");
+        sb.append("👤 **На кого:** ").append(targetName).append("\n");
+        sb.append("💬 **Причина:** ").append(complaint.getReason()).append("\n");
+        sb.append("📅 **Дата:** ").append(complaint.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n");
+        sb.append("📌 **Статус:** ").append(statusEmoji).append(" ").append(complaint.getStatus()).append("\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        // Если есть информация о решении
+        if ("RESOLVED".equals(complaint.getStatus()) && complaint.getResolvedBy() != null) {
+            User resolver = userService.findById(complaint.getResolvedBy());
+            String resolverName = resolver != null ? resolver.getFirstName() : "Неизвестный";
+            sb.append("✅ **Решена:** ").append(resolverName);
+            if (complaint.getResolvedAt() != null) {
+                sb.append(" | ").append(complaint.getResolvedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")));
+            }
+            sb.append("\n");
+        }
+
+        UniversalResponse response = new UniversalResponse(sb.toString());
+
+        // ===== КНОПКИ =====
+        if ("PENDING".equals(complaint.getStatus())) {
+            response.addButtonFullRow("🔍 Посмотреть заявку", "view_elder_" + complaint.getElderId());
+            response.addButtonFullRow("✅ Отметить как решённую", "admin_resolve_complaint_" + complaintId);
+        } else {
+            response.addButtonFullRow("🔍 Посмотреть заявку", "view_elder_" + complaint.getElderId());
+        }
+
+        response.addButtonFullRow("🔙 Назад к списку жалоб", "admin_complaints");
+        response.addButtonFullRow("⚙️ Админ-панель", "admin_menu");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
+    }
+    /**
+     * Отмечает жалобу как решённую
+     */
+    private UniversalResponse resolveComplaint(Long userId, Long complaintId) {
+        User admin = getUserOrNull(userId);
+        if (!isAdmin(admin)) {
+            return responseWithMainMenu("❌ Доступ запрещён.");
+        }
+
+        Complaint complaint = complaintRepository.findById(complaintId).orElse(null);
+        if (complaint == null) {
+            return responseWithMainMenu("❌ Жалоба не найдена.");
+        }
+
+        complaint.setStatus("RESOLVED");
+        complaint.setResolvedBy(userId);
+        complaint.setResolvedAt(LocalDateTime.now());
+        complaintRepository.save(complaint);
+
+        UniversalResponse response = new UniversalResponse(
+                "✅ **Жалоба #" + complaintId + " отмечена как решённая.**\n\n" +
+                        "👤 **Администратор:** " + admin.getFirstName() + "\n" +
+                        "📅 **Дата:** " + LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+        );
+        response.addButtonFullRow("🔙 Назад к списку жалоб", "admin_complaints");
+        response.addButtonFullRow("⚙️ Админ-панель", "admin_menu");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
     }
 }
