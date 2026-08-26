@@ -86,7 +86,7 @@ public class OperatorService {
 
         // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ =====
         if (elder.getBonusPointsAwarded() == null || !elder.getBonusPointsAwarded()) {
-            User author = userService.findById(elder.getCreatedBy());
+            User author = getUserOrNull(elder.getCreatedBy());
             if (author != null) {
                 author.addBonusPoints(-1);
                 userService.saveUser(author);
@@ -97,7 +97,7 @@ public class OperatorService {
 
         // ===== УВЕДОМЛЯЕМ КЛИЕНТА =====
         if (elder.getCreatedBy() != null) {
-            User author = userService.findById(elder.getCreatedBy());
+            User author = getUserOrNull(elder.getCreatedBy());
             if (author != null) {
                 String operatorName = user.getFirstName() != null ? user.getFirstName() : "Оператор";
                 sendNotification(author.getTelegramId(),
@@ -531,12 +531,11 @@ public class OperatorService {
     // ===== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =====
     // ============================================================
 
-   // private User getUserOrNull(Long userId) {
-   //     return userService.findByTelegramId(userId).orElse(null);}
-
     private User getUserOrNull(Long userId) {
-        return userService.findById(userId);
-    }
+       return userService.findByTelegramId(userId).orElse(null);}
+
+   // private User getUserOrNull(Long userId) {
+   //     return userService.findById(userId);}
 
     private boolean isOperator(User user) {
         return user != null && user.getAccessLevel() == AccessLevel.OPERATOR;

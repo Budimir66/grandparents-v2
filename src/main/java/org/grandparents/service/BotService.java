@@ -2440,11 +2440,13 @@ public class BotService {
                 response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
             }
 
-            // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЕДЁТ ЗАЯВКУ =====
+            // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЕДЁТ ЗАЯВКУ (ПРАВИЛЬНАЯ ВЕРСИЯ) =====
             boolean isAssignedToElder = false;
             if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+                // Разбиваем строку с ID по запятой
                 String[] ids = elder.getAssignedOperatorIds().split(",");
                 for (String id : ids) {
+                    // Убираем пробелы и сравниваем с Telegram ID пользователя
                     if (id.trim().equals(String.valueOf(userId))) {
                         isAssignedToElder = true;
                         break;
@@ -2452,6 +2454,7 @@ public class BotService {
                 }
             }
 
+// Теперь показываем кнопку только если оператор ВЕДЁТ заявку
             if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
@@ -4170,7 +4173,7 @@ public class BotService {
         }
 
         // Проверяем, что автор существует
-        User author = userService.findById(elder.getCreatedBy());
+        User author = getUserOrNull(elder.getCreatedBy());
         if (author == null) {
             return responseWithMainMenu("❌ Автор заявки не найден.");
         }
@@ -4221,7 +4224,7 @@ public class BotService {
         }
 
         // Проверяем, что автор существует
-        User author = userService.findById(elder.getCreatedBy());
+        User author = getUserOrNull(elder.getCreatedBy());
         if (author == null) {
             return responseWithMainMenu("❌ Автор заявки не найден.");
         }
