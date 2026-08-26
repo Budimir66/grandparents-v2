@@ -9,19 +9,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
 public class OperatorService {
 
     private static final Logger log = LoggerFactory.getLogger(OperatorService.class);
-
     private final UserService userService;
     private final ElderService elderService;
     private final CareHomeService careHomeService;
     private final BonusSettingService bonusSettingService;
     private final OperatorReactionRepository reactionRepository;
     private final MessageSender messageSender;
+
 
     public OperatorService(UserService userService,
                            ElderService elderService,
@@ -40,7 +41,6 @@ public class OperatorService {
     // ============================================================
     // ===== ВЗЯТЬ ЗАЯВКУ В РАБОТУ =====
     // ============================================================
-
     public UniversalResponse takeElder(Long userId, Long elderId) {
         User user = userService.findByTelegramId(userId).orElse(null);
         if (user == null) {
@@ -52,28 +52,32 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // ===== ПРОВЕРКА: ЗАЯВКА УЖЕ В РАБОТЕ =====
-        if (elder.getAssignedOperatorId() != null) {
-            String operatorName = "Неизвестный";
-            User operator = userService.findById(elder.getAssignedOperatorId());
-            if (operator != null) {
-                operatorName = operator.getFirstName();
-            }
-            return responseWithMainMenu("❌ Эта заявка уже взята в работу оператором " + operatorName);
-        }
-
         // ===== ПРОВЕРКА: АВТОР НЕ МОЖЕТ ВЗЯТЬ СВОЮ ЗАЯВКУ =====
         if (elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId)) {
             return responseWithMainMenu("❌ Вы не можете взять свою заявку.");
         }
 
-        // ===== БЕРЁМ ЗАЯВКУ В РАБОТУ =====
-        elder.setAssignedOperatorId(userId);
-        elder.setStatus(ElderStatus.IN_PROGRESS);
-        elder.setTakenAt(LocalDateTime.now());
+        // ===== ПРОВЕРКА: ЗАЯВКА НЕ ЗАВЕРШЕНА =====
+        if (elder.getStatus() == ElderStatus.COMPLETED ||
+                elder.getStatus() == ElderStatus.DELETED ||
+                elder.getStatus() == ElderStatus.EXPIRED) {
+            return responseWithMainMenu("❌ Эта заявка уже завершена или удалена.");
+        }
+
+        // ===== ДОБАВЛЯЕМ ОПЕРАТОРА В СПИСОК =====
+        String currentIds = elder.getAssignedOperatorIds();
+        if (currentIds == null || currentIds.isEmpty()) {
+            elder.setAssignedOperatorIds(String.valueOf(userId));
+        } else {
+            List<String> ids = Arrays.asList(currentIds.split(","));
+            if (!ids.contains(String.valueOf(userId))) {
+                elder.setAssignedOperatorIds(currentIds + "," + userId);
+            }
+        }
+
         elderService.updateElder(elder);
 
-        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ =====
+        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ (ТОЛЬКО ПРИ ПЕРВОМ ВЗЯТИИ) =====
         if (elder.getBonusPointsAwarded() == null || !elder.getBonusPointsAwarded()) {
             User author = userService.findById(elder.getCreatedBy());
             if (author != null) {
@@ -85,31 +89,21 @@ public class OperatorService {
             }
         }
 
-        // ===== УВЕДОМЛЯЕМ АВТОРА =====
+        // ===== УВЕДОМЛЯЕМ КЛИЕНТА =====
         if (elder.getCreatedBy() != null) {
             User author = userService.findById(elder.getCreatedBy());
             if (author != null) {
                 String operatorName = user.getFirstName() != null ? user.getFirstName() : "Оператор";
-                try {
-                    User authorUser = userService.findByTelegramId(author.getTelegramId()).orElse(null);
-                    if (authorUser != null) {
-                        Long chatId = authorUser.getChatId() != null ? authorUser.getChatId() : authorUser.getTelegramId();
-                        UniversalResponse notification = new UniversalResponse(
-                                "📢 **Вашу заявку #" + elderId + " взяли в работу!**\n\n" +
-                                        "👤 **Оператор:** " + operatorName + "\n" +
-                                        "📌 **Статус:** В работе\n\n" +
-                                        "Оператор свяжется с вами в ближайшее время."
-                        );
-                        notification.addButtonFullRow("👤 Моя заявка", "my_request");
-                        notification.addButtonFullRow("🏠 Главное меню", "main_menu");
-                        messageSender.sendMessage(chatId, notification);
-                        log.info("📨 Уведомление отправлено автору {}", author.getTelegramId());
-                    }
-                } catch (Exception e) {
-                    log.error("❌ Ошибка отправки уведомления автору: {}", e.getMessage());
-                }
+                // Используем sendNotification (добавленный в OperatorService)
+                sendNotification(author.getTelegramId(),
+                        "📢 **Новый отклик на заявку #" + elderId + "!**\n\n" +
+                                "👤 **Оператор:** " + operatorName + "\n" +
+                                "📌 **Статус:** Рассматривает вашу заявку\n\n" +
+                                "Выберите лучшего оператора в карточке заявки."
+                );
             }
         }
+
 
         // ===== ФОРМИРУЕМ ПОЛНУЮ КАРТОЧКУ ЗАЯВКИ ДЛЯ ОПЕРАТОРА =====
         StringBuilder card = new StringBuilder();
@@ -584,5 +578,29 @@ public class OperatorService {
         if (userId == null) return "Неизвестный";
         User user = userService.findById(userId);
         return user != null ? user.getFirstName() : "Неизвестный";
+    }
+    // ===== МЕТОД ДЛЯ ОТПРАВКИ УВЕДОМЛЕНИЙ =====
+    private void sendNotification(Long userId, String text, String... buttons) {
+        try {
+            User user = userService.findByTelegramId(userId).orElse(null);
+            if (user == null) {
+                log.warn("⚠️ Пользователь {} не найден для уведомления", userId);
+                return;
+            }
+
+            UniversalResponse response = new UniversalResponse(text);
+            for (int i = 0; i < buttons.length; i += 2) {
+                if (i + 1 < buttons.length) {
+                    response.addButtonFullRow(buttons[i], buttons[i + 1]);
+                }
+            }
+            response.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+            Long chatId = user.getChatId() != null ? user.getChatId() : userId;
+            messageSender.sendMessage(chatId, response);
+            log.info("📨 Уведомление отправлено пользователю {}", userId);
+        } catch (Exception e) {
+            log.error("❌ Ошибка отправки уведомления пользователю {}: {}", userId, e.getMessage(), e);
+        }
     }
 }

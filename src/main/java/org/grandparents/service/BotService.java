@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -416,6 +417,13 @@ public class BotService {
 
         if (callbackData.equals("request_contact_from_max")) {
             return handleRequestContactFromMax(userId);
+        }
+
+        // ===== СВЯЗАТЬСЯ С ОПЕРАТОРОМ =====
+        if (callbackData.startsWith("contact_operator_")) {
+            String operatorIdStr = callbackData.substring("contact_operator_".length());
+            Long operatorId = Long.parseLong(operatorIdStr);
+            return handleContactOperator(userId, operatorId);
         }
 
         // ===== ЖАЛОБЫ (АДМИН) =====
@@ -2473,6 +2481,32 @@ public class BotService {
             }
         }
 
+        // ===== ПОКАЗЫВАЕМ ОПЕРАТОРОВ, КОТОРЫЕ ВЗЯЛИ ЗАЯВКУ =====
+        String assignedIds = elder.getAssignedOperatorIds();
+        if (assignedIds != null && !assignedIds.isEmpty()) {
+            List<String> operatorIds = Arrays.asList(assignedIds.split(","));
+            if (!operatorIds.isEmpty()) {
+                response.addButtonFullRow("━━━━━━━━━━━━━━━━━━━━━━━", "separator");
+                response.addButtonFullRow("📞 **Операторы, готовые помочь:**", "separator");
+
+                for (String idStr : operatorIds) {
+                    try {
+                        Long operatorId = Long.parseLong(idStr);
+                        User operator = userService.findById(operatorId);
+                        if (operator != null) {
+                            String contactInfo = operator.getFirstName();
+                            if (operator.getPhone() != null) {
+                                contactInfo += " | 📱 " + operator.getPhone();
+                            }
+                            response.addButtonFullRow("📞 " + contactInfo, "contact_operator_" + operatorId);
+                        }
+                    } catch (NumberFormatException e) {
+                        log.warn("⚠️ Неверный ID оператора: {}", idStr);
+                    }
+                }
+            }
+        }
+
         // ===== ОБЩИЕ КНОПКИ =====
         if (viewingFromInterested) {
             response.addButtonFullRow("⭐ Интересные заявки", "my_requests_interested");
@@ -4430,6 +4464,25 @@ public class BotService {
         );
         response.addButtonFullRow("🔙 Назад к списку жалоб", "admin_complaints");
         response.addButtonFullRow("⚙️ Админ-панель", "admin_menu");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
+    }
+    private UniversalResponse handleContactOperator(Long clientId, Long operatorId) {
+        User operator = userService.findById(operatorId);
+        if (operator == null) {
+            return responseWithMainMenu("❌ Оператор не найден.");
+        }
+
+        // Проверяем, есть ли у оператора контакты
+        String contactInfo = "📞 **Контактные данные оператора:**\n\n";
+        contactInfo += "👤 **Имя:** " + (operator.getFirstName() != null ? operator.getFirstName() : "Не указано") + "\n";
+        contactInfo += "📱 **Телефон:** " + (operator.getPhone() != null ? operator.getPhone() : "Не указан") + "\n";
+        contactInfo += "📱 **WhatsApp:** " + (operator.getWhatsapp() != null ? operator.getWhatsapp() : "Не указан") + "\n";
+        contactInfo += "✈️ **Telegram:** " + (operator.getTelegramUsername() != null ? "@" + operator.getTelegramUsername() : "Не указан") + "\n";
+        contactInfo += "📧 **Email:** " + (operator.getEmail() != null ? operator.getEmail() : "Не указан");
+
+        UniversalResponse response = new UniversalResponse(contactInfo);
+        response.addButtonFullRow("🔙 Назад к заявке", "my_request");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }

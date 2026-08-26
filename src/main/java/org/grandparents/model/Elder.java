@@ -2,6 +2,10 @@ package org.grandparents.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "elder")
@@ -111,6 +115,9 @@ public class Elder {
     @Column(name = "bonus_points_awarded")
     private Boolean bonusPointsAwarded = false;
 
+    @Column(name = "assigned_operator_ids", columnDefinition = "TEXT")
+    private String assignedOperatorIds; // "1001,1002,1003"
+
     // ===== КОНСТРУКТОРЫ =====
     public Elder() {
     }
@@ -133,6 +140,9 @@ public class Elder {
     }
 
     // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
+
+    public String getAssignedOperatorIds() { return assignedOperatorIds; }
+    public void setAssignedOperatorIds(String assignedOperatorIds) { this.assignedOperatorIds = assignedOperatorIds; }
 
     public Boolean getBonusPointsAwarded() { return bonusPointsAwarded; }
     public void setBonusPointsAwarded(Boolean bonusPointsAwarded) { this.bonusPointsAwarded = bonusPointsAwarded; }
@@ -276,5 +286,13 @@ public class Elder {
                 ", budget=" + budget +
                 ", status=" + status +
                 '}';
+    }
+    public List<Long> getAssignedOperatorIdList() {
+        if (assignedOperatorIds == null || assignedOperatorIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return Arrays.stream(assignedOperatorIds.split(","))
+                .map(Long::parseLong)
+                .collect(Collectors.toList());
     }
 }
