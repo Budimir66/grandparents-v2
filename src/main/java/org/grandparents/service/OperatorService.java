@@ -64,17 +64,29 @@ public class OperatorService {
             return responseWithMainMenu("❌ Эта заявка уже завершена или удалена.");
         }
 
-        // ===== ДОБАВЛЯЕМ ОПЕРАТОРА В СПИСОК =====
+        // ===== ДОБАВЛЯЕМ ОПЕРАТОРА В СПИСОК (assigned_operator_ids) =====
         String currentIds = elder.getAssignedOperatorIds();
         if (currentIds == null || currentIds.isEmpty()) {
             elder.setAssignedOperatorIds(String.valueOf(userId));
+            log.info("📝 [takeElder] Заявка #{}: установлен первый оператор {}", elderId, userId);
         } else {
+            // Проверяем, не добавлен ли уже этот оператор
             List<String> ids = Arrays.asList(currentIds.split(","));
             if (!ids.contains(String.valueOf(userId))) {
                 elder.setAssignedOperatorIds(currentIds + "," + userId);
+                log.info("📝 [takeElder] Заявка #{}: добавлен оператор {} в список {}", elderId, userId, elder.getAssignedOperatorIds());
+            } else {
+                log.info("📝 [takeElder] Заявка #{}: оператор {} уже в списке", elderId, userId);
             }
         }
 
+        // ===== НЕ МЕНЯЕМ СТАТУС ЗАЯВКИ! =====
+        // Статус должен оставаться IN_PROGRESS, если он уже был таким
+        // Если заявка была NEW, ставим IN_PROGRESS
+        if (elder.getStatus() == ElderStatus.NEW) {
+            elder.setStatus(ElderStatus.IN_PROGRESS);
+        }
+        elder.setTakenAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
         // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ (ТОЛЬКО ПРИ ПЕРВОМ ВЗЯТИИ) =====
@@ -94,7 +106,6 @@ public class OperatorService {
             User author = userService.findById(elder.getCreatedBy());
             if (author != null) {
                 String operatorName = user.getFirstName() != null ? user.getFirstName() : "Оператор";
-                // Используем sendNotification (добавленный в OperatorService)
                 sendNotification(author.getTelegramId(),
                         "📢 **Новый отклик на заявку #" + elderId + "!**\n\n" +
                                 "👤 **Оператор:** " + operatorName + "\n" +
