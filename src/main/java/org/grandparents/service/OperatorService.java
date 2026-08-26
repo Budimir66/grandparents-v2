@@ -349,22 +349,31 @@ public class OperatorService {
             return responseWithMainMenu("❌ Вы не можете закрыть эту заявку.");
         }
 
-        // ===== ОПРЕДЕЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ИНИЦИИРОВАЛ ЗАКРЫТИЕ =====
+        // ============================================================
+        // ===== ОПРЕДЕЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ОТПРАВИЛ ЗАПРОС =====
+        // Ищем НЕ автора в assigned_operator_ids
+        // ============================================================
         Long requestingOperatorId = null;
         if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
             String[] ids = elder.getAssignedOperatorIds().split(",");
-            if (ids.length > 0) {
-                try {
-                    requestingOperatorId = Long.parseLong(ids[0].trim());
-                } catch (NumberFormatException e) {
-                    log.warn("⚠️ Не удалось распарсить ID оператора: {}", ids[0]);
+            for (String id : ids) {
+                Long operatorId = Long.parseLong(id.trim());
+                // Пропускаем автора
+                if (elder.getCreatedBy() != null && elder.getCreatedBy().equals(operatorId)) {
+                    continue;
                 }
+                // Берём первого НЕ автора
+                requestingOperatorId = operatorId;
+                break;
             }
         }
 
         // Если не нашли в assigned_operator_ids, пробуем через assigned_operator_id (старая модель)
         if (requestingOperatorId == null && elder.getAssignedOperatorId() != null) {
-            requestingOperatorId = elder.getAssignedOperatorId();
+            // Проверяем, что это не автор
+            if (elder.getCreatedBy() == null || !elder.getCreatedBy().equals(elder.getAssignedOperatorId())) {
+                requestingOperatorId = elder.getAssignedOperatorId();
+            }
         }
 
         // ===== ЗАКРЫВАЕМ ЗАЯВКУ =====
@@ -374,7 +383,7 @@ public class OperatorService {
         elderService.updateElder(elder);
 
         // ============================================================
-        // ===== УВЕДОМЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ИНИЦИИРОВАЛ ЗАКРЫТИЕ =====
+        // ===== УВЕДОМЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ОТПРАВИЛ ЗАПРОС =====
         // ============================================================
         if (requestingOperatorId != null && !requestingOperatorId.equals(userId)) {
             User operator = userService.findById(requestingOperatorId);
@@ -386,8 +395,6 @@ public class OperatorService {
                     confirmatorName = author != null ? author.getFirstName() : "Автор";
                 } else if (isClient) {
                     confirmatorName = "Клиент";
-                } else {
-                    confirmatorName = "Пользователь";
                 }
 
                 UniversalResponse notification = new UniversalResponse(
@@ -395,7 +402,8 @@ public class OperatorService {
                                 "✅ " + confirmatorName + " подтвердил заселение.\n" +
                                 "📋 **Подопечный:** " + elder.getFullName() + "\n" +
                                 "🏢 **Пансионат:** " + getCareHomeName(elder.getCareHomeId()) + "\n\n" +
-                                "💰 Вы получили **+5 баллов** за успешное закрытие заявки!"
+                                "📌 Заявка успешно завершена!"
+                        // Убрали упоминание о баллах
                 );
                 notification.addButtonFullRow("📋 Мои заявки", "my_requests");
                 notification.addButtonFullRow("🏠 Главное меню", "main_menu");
