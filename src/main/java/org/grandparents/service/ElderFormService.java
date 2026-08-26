@@ -268,18 +268,22 @@ public class ElderFormService {
                 } else if (user != null && isOperator(user)) {
                     tempElder.setCreatedBy(userId);
                     tempElder.setCareHomeId(user.getCareHomeId());
-                    tempElder.setAssignedOperatorId(userId);
-                    tempElder.setStatus(ElderStatus.IN_PROGRESS);
-                    tempElder.setTakenAt(LocalDateTime.now());
+                    tempElder.setAssignedOperatorId(null);             // ← НЕ НАЗНАЧАЕМ!
+                    tempElder.setStatus(ElderStatus.NEW);              // ← НОВАЯ!
+                    tempElder.setTakenAt(null);
                 } else if (user != null && isManager(user)) {
                     tempElder.setCreatedBy(userId);
                     tempElder.setCareHomeId(user.getCareHomeId());
+                    tempElder.setAssignedOperatorId(null);
                     tempElder.setStatus(ElderStatus.NEW);
+                    tempElder.setTakenAt(null);
                 } else if (user != null && isAdmin(user)) {
                     tempElder.setCreatedBy(userId);
                     tempElder.setStatus(ElderStatus.NEW);
+                    tempElder.setAssignedOperatorId(null);
                 } else {
                     tempElder.setStatus(ElderStatus.NEW);
+                    tempElder.setAssignedOperatorId(null);
                 }
 
                 elderService.createElder(tempElder);
