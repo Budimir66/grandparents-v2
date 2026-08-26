@@ -2,6 +2,7 @@ package org.grandparents.repository;
 
 import org.grandparents.model.OperatorReaction;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -25,6 +26,9 @@ public interface OperatorReactionRepository extends JpaRepository<OperatorReacti
   //  Optional<OperatorReaction> findByOperatorIdAndElderId(Long operatorId, Long elderId);
     // OperatorReactionRepository.java
 
+    @Modifying
+    @Query("DELETE FROM Rating r WHERE r.elderId = :elderId")
+    void deleteByElderId(@Param("elderId") Long elderId);
     /**
      * Находит ВСЕ реакции оператора на конкретную заявку
      * (возвращает список, потому что могут быть дубликаты)
@@ -34,4 +38,5 @@ public interface OperatorReactionRepository extends JpaRepository<OperatorReacti
             @Param("operatorId") Long operatorId,
             @Param("elderId") Long elderId
     );
+
 }

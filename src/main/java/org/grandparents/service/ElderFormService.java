@@ -5,6 +5,8 @@ import org.grandparents.model.AccessLevel;
 import org.grandparents.model.Elder;
 import org.grandparents.model.ElderStatus;
 import org.grandparents.model.User;
+import org.grandparents.repository.OperatorReactionRepository;
+import org.grandparents.repository.RatingRepository;
 import org.grandparents.statemachine.DialogState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +26,8 @@ public class ElderFormService {
     private final NotificationService notificationService;
     private final BonusSettingService bonusSettingService;
     private final MessageSender messageSender;
+    private final OperatorReactionRepository reactionRepository;
+    private final RatingRepository ratingRepository;
     // private static final Logger log = LoggerFactory.getLogger(ElderFormService.class);
 
 
@@ -32,13 +36,17 @@ public class ElderFormService {
                             UserStateService stateService,
                             NotificationService notificationService,
                             BonusSettingService bonusSettingService,
-                            MessageSender messageSender) {
+                            MessageSender messageSender,
+                            OperatorReactionRepository reactionRepository,
+                            RatingRepository ratingRepository) {
         this.userService = userService;
         this.elderService = elderService;
         this.stateService = stateService;
         this.notificationService = notificationService;
         this.bonusSettingService = bonusSettingService;
         this.messageSender = messageSender;
+        this.ratingRepository = ratingRepository;
+        this.reactionRepository = reactionRepository;
     }
 
     /**
@@ -507,9 +515,11 @@ public class ElderFormService {
         }
 
         // ===== УДАЛЯЕМ ЗАЯВКУ =====
-        elder.setStatus(ElderStatus.DELETED);
-        elder.setUpdatedAt(LocalDateTime.now());
-        elderService.updateElder(elder);
+        elderService.deleteElder(elder.getId());
+
+      //  elder.setStatus(ElderStatus.DELETED);
+      //  elder.setUpdatedAt(LocalDateTime.now());
+      //  elderService.updateElder(elder);
 
         // Очищаем состояние
         stateService.clearState(userId);
@@ -539,7 +549,7 @@ public class ElderFormService {
         }
 
         // Проверяем, что пользователь — автор
-        if (!elder.getCreatedBy().equals(userId)) {
+        if (elder.getCreatedBy() == null || !elder.getCreatedBy().equals(userId)) {
             return responseWithMainMenu("❌ Вы не можете удалить эту заявку.");
         }
 
@@ -550,7 +560,7 @@ public class ElderFormService {
                 author.addBonusPoints(-3);
                 userService.saveUser(author);
 
-                // Уведомляем оператора через messageSender напрямую
+                // Уведомляем оператора
                 try {
                     User operator = userService.findById(elder.getAssignedOperatorId());
                     if (operator != null) {
@@ -571,9 +581,21 @@ public class ElderFormService {
             }
         }
 
-        // Удаляем заявку
-        elder.setStatus(ElderStatus.DELETED);
-        elderService.updateElder(elder);
+        // ===== УДАЛЯЕМ СВЯЗАННЫЕ ДАННЫЕ =====
+        try {
+            reactionRepository.deleteByElderId(elder.getId());
+        } catch (Exception e) {
+            log.warn("⚠️ Не удалось удалить реакции для заявки {}: {}", elder.getId(), e.getMessage());
+        }
+
+        try {
+            ratingRepository.deleteByElderId(elder.getId());
+        } catch (Exception e) {
+            log.warn("⚠️ Не удалось удалить оценки для заявки {}: {}", elder.getId(), e.getMessage());
+        }
+
+        // ===== ПОЛНОЕ УДАЛЕНИЕ ЗАЯВКИ =====
+        elderService.deleteElder(elder.getId());
         stateService.clearState(userId);
 
         UniversalResponse response = new UniversalResponse(

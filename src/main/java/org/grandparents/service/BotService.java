@@ -2870,7 +2870,14 @@ public class BotService {
 
         // ===== СОРТИРУЕМ: НОВЫЕ СВЕРХУ =====
         allElders = allElders.stream()
-                .sorted((e1, e2) -> e2.getCreatedAt().compareTo(e1.getCreatedAt()))
+                .sorted((e1, e2) -> {
+                    LocalDateTime d1 = e1.getCreatedAt();
+                    LocalDateTime d2 = e2.getCreatedAt();
+                    if (d1 == null && d2 == null) return 0;
+                    if (d1 == null) return 1;   // null считается старше
+                    if (d2 == null) return -1;  // null считается старше
+                    return d2.compareTo(d1);    // новые сверху
+                })
                 .collect(Collectors.toList());
 
         // Фильтруем: исключаем заявки, которые уже в "Интересных" у этого оператора
@@ -3923,6 +3930,7 @@ public class BotService {
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
+
     /**
      * Возвращает отфильтрованный список заявок для оператора
      * (исключая уже отмеченные как "Интересные")
@@ -3935,19 +3943,67 @@ public class BotService {
         List<Long> interestedElderIds = reactionRepository.findInterestedElderIdsByOperatorId(userId);
 
         // Все активные заявки
-        List<Elder> allElders = elderService.findActiveElders();
-
-        // ===== СОРТИРУЕМ: НОВЫЕ СВЕРХУ =====
-        allElders = allElders.stream()
-                .sorted((e1, e2) -> e2.getCreatedAt().compareTo(e1.getCreatedAt()))
-                .collect(Collectors.toList());
-
-        return allElders.stream()
+        return elderService.findActiveElders().stream()
+                // Исключаем "Интересные"
                 .filter(elder -> !interestedElderIds.contains(elder.getId()))
+                // Сортировка: новые сверху
+                .sorted((e1, e2) -> {
+                    LocalDateTime d1 = e1.getCreatedAt();
+                    LocalDateTime d2 = e2.getCreatedAt();
+                    if (d1 == null && d2 == null) return 0;
+                    if (d1 == null) return 1;
+                    if (d2 == null) return -1;
+                    return d2.compareTo(d1);
+                })
+                // ===== ОСТАЛЬНЫЕ ФИЛЬТРЫ (город, бюджет, дата) =====
                 .filter(elder -> {
-                    // Здесь копируем все фильтры из handleFindRequests
-                    // ... (город, регион, бюджет, дата)
-                    return true; // Временно, для примера
+                    boolean filterTodayOnly = stateService.isFilterTodayOnly(userId);
+
+                    // Фильтр по дате
+                    if (filterTodayOnly) {
+                        LocalDateTime today = LocalDateTime.now();
+                        LocalDateTime startOfDay = today.withHour(0).withMinute(0).withSecond(0).withNano(0);
+                        if (elder.getCreatedAt() == null || elder.getCreatedAt().isBefore(startOfDay)) {
+                            return false;
+                        }
+                    }
+
+                    // Фильтр по городу/региону
+                    String city = user.getPreferredCity();
+                    String region = user.getPreferredRegion();
+                    boolean hasCityFilter = city != null && !city.trim().isEmpty();
+                    boolean hasRegionFilter = region != null && !region.trim().isEmpty();
+
+                    if (hasCityFilter || hasRegionFilter) {
+                        String elderCity = elder.getCity() != null ? elder.getCity().toLowerCase() : "";
+                        String elderLocation = elder.getPreferredLocation() != null ? elder.getPreferredLocation().toLowerCase() : "";
+                        String elderRegion = elder.getRegion() != null ? elder.getRegion().toLowerCase() : "";
+
+                        boolean locationMatches = false;
+                        if (hasCityFilter) {
+                            String searchCity = city.toLowerCase().trim();
+                            if (elderCity.contains(searchCity) || elderLocation.contains(searchCity)) {
+                                locationMatches = true;
+                            }
+                        }
+                        if (!locationMatches && hasRegionFilter) {
+                            String searchRegion = region.toLowerCase().trim();
+                            if (elderRegion.contains(searchRegion) || elderLocation.contains(searchRegion)) {
+                                locationMatches = true;
+                            }
+                        }
+                        if (!locationMatches) {
+                            return false;
+                        }
+                    }
+
+                    // Фильтр по бюджету
+                    Double budgetMin = user.getBudgetMin();
+                    Double budgetMax = user.getBudgetMax();
+                    if (budgetMin != null && elder.getBudget() < budgetMin) return false;
+                    if (budgetMax != null && elder.getBudget() > budgetMax) return false;
+
+                    return true;
                 })
                 .collect(Collectors.toList());
     }

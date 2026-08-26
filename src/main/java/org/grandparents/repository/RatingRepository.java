@@ -17,4 +17,5 @@ public interface RatingRepository extends JpaRepository<Rating, Long> {
 
     @Query("SELECT COUNT(r) FROM Rating r WHERE r.targetId = :targetId")
     Integer getTotalRatingsForUser(Long targetId);
+    void deleteByElderId(Long elderId);
 }
