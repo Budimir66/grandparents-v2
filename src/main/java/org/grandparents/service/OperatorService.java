@@ -238,12 +238,12 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // Проверяем, что заявка в работе
+        // ===== ПРОВЕРЯЕМ, ЧТО ЗАЯВКА В РАБОТЕ =====
         if (elder.getStatus() != ElderStatus.IN_PROGRESS) {
             return responseWithMainMenu("❌ Заявка не в работе.");
         }
 
-        // ===== ПРОВЕРЯЕМ, ЧТО ПОЛЬЗОВАТЕЛЬ ВЕДЁТ ЗАЯВКУ =====
+        // ===== ПРОВЕРЯЕМ, ЧТО ПОЛЬЗОВАТЕЛЬ ВЕДЁТ ЗАЯВКУ (НОВАЯ МОДЕЛЬ) =====
         boolean isAssigned = false;
         if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
             String[] ids = elder.getAssignedOperatorIds().split(",");
@@ -264,7 +264,7 @@ public class OperatorService {
             return responseWithMainMenu("❌ Эта заявка не находится у вас в работе.");
         }
 
-        // Проверяем, что автор не равен оператору
+        // ===== ПРОВЕРЯЕМ, ЧТО АВТОР НЕ РАВЕН ОПЕРАТОРУ =====
         Long authorId = elder.getCreatedBy();
         if (authorId == null) {
             return responseWithMainMenu("❌ У заявки нет автора.");
@@ -283,8 +283,9 @@ public class OperatorService {
         User operator = userService.findById(userId);
         String operatorName = operator != null ? operator.getFirstName() : "Оператор";
 
+        // Формируем сообщение для автора
         String message = "🏁 **Запрос на закрытие заявки!**\n\n" +
-                "Оператор " + operatorName + " сообщает, что ваш подопечный **" + elder.getFullName() + "** заселился в пансионат **" + getCareHomeName(elder.getCareHomeId()) + "**.\n\n" +
+                "Оператор " + operatorName + " сообщает, что ваш подопечный **" + elder.getFullName() + "** заселился в пансионат.\n\n" +
                 "Подтвердите закрытие заявки.\n\n" +
                 "💰 Оператор получит +5 баллов.\n" +
                 "📌 Вы получите +3 балла как автор заявки.\n\n" +
@@ -298,6 +299,7 @@ public class OperatorService {
         Long chatId = author.getChatId() != null ? author.getChatId() : author.getTelegramId();
         messageSender.sendMessage(chatId, response);
 
+        // ===== ОТВЕТ ОПЕРАТОРУ =====
         return responseWithMainMenu("📨 Запрос на закрытие заявки #" + elderId + " отправлен " + author.getFirstName() + ".\n\n" +
                 "⏳ Статус заявки: **Ожидает подтверждения**\n\n" +
                 "Вы получите уведомление, когда клиент подтвердит закрытие.");
