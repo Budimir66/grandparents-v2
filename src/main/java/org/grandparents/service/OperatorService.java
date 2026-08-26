@@ -345,13 +345,36 @@ public class OperatorService {
             return responseWithMainMenu("❌ Вы не можете закрыть эту заявку.");
         }
 
+        // ===== СОХРАНЯЕМ ID ОПЕРАТОРА, КОТОРЫЙ ИНИЦИИРОВАЛ ЗАКРЫТИЕ =====
+        Long requestingOperatorId = elder.getAssignedOperatorId();
+
         // ===== ЗАКРЫВАЕМ ЗАЯВКУ =====
         elder.setStatus(ElderStatus.COMPLETED);
         elder.setCompletedBy(userId);
         elder.setCompletedAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
-        // ===== ОТВЕТ =====
+        // ===== УВЕДОМЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ИНИЦИИРОВАЛ ЗАКРЫТИЕ =====
+        if (requestingOperatorId != null && !requestingOperatorId.equals(userId)) {
+            User operator = userService.findById(requestingOperatorId);
+            if (operator != null) {
+                String authorName = getUserOrNull(userId) != null ? getUserOrNull(userId).getFirstName() : "Клиент";
+                UniversalResponse notification = new UniversalResponse(
+                        "🎉 **Заявка #" + elderId + " закрыта!**\n\n" +
+                                "✅ Автор **" + authorName + "** подтвердил заселение.\n" +
+                                "📋 **Подопечный:** " + elder.getFullName() + "\n" +
+                                "🏢 **Пансионат:** " + getCareHomeName(elder.getCareHomeId()) + "\n\n" +
+                                "💰 Вы получили **+5 баллов** за успешное закрытие заявки!"
+                );
+                notification.addButtonFullRow("📋 Мои заявки", "my_requests");
+                notification.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                Long chatId = operator.getChatId() != null ? operator.getChatId() : operator.getTelegramId();
+                messageSender.sendMessage(chatId, notification);
+            }
+        }
+
+        // ===== ОТВЕТ ТОМУ, КТО ПОДТВЕРДИЛ ЗАКРЫТИЕ =====
         String message = "🏁 **Заявка #" + elderId + " закрыта!**\n\n" +
                 "📋 **Информация о заявке:**\n" +
                 "👤 **Подопечный:** " + elder.getFullName() + "\n" +
@@ -559,5 +582,10 @@ public class OperatorService {
         } catch (Exception e) {
             log.error("❌ Ошибка отправки уведомления пользователю {}: {}", userId, e.getMessage(), e);
         }
+    }
+    private String getCareHomeName(Long careHomeId) {
+        if (careHomeId == null) return "не указан";
+        CareHome careHome = careHomeService.findById(careHomeId);
+        return careHome != null ? careHome.getName() : "не указан";
     }
 }
