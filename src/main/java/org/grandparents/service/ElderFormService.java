@@ -111,6 +111,13 @@ public class ElderFormService {
             return response;
         }
 
+        // Для оператора
+        if (user.getAccessLevel() == AccessLevel.OPERATOR || user.getAccessLevel() == AccessLevel.MANAGER) {
+            tempElder.setCreatedBy(userId);
+            tempElder.setCareHomeId(user.getCareHomeId());
+            tempElder.setStatus(ElderStatus.NEW);  // ← НЕ OFFERED и НЕ IN_PROGRESS!
+        }
+
         // ===== ДЛЯ ОПЕРАТОРА, МЕНЕДЖЕРА, АДМИНИСТРАТОРА — СРАЗУ АНКЕТА =====
         // Согласие считается автоматически принятым
         tempElder.setConsentGiven(true);

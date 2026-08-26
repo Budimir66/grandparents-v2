@@ -29,10 +29,11 @@ public class ElderService {
     // ===== БАЗОВЫЕ CRUD =====
 
     public Elder createElder(Elder elder) {
-        if (elder.getCreatedAt() == null) {
-            elder.setCreatedAt(LocalDateTime.now());
+        // ===== НЕ МЕНЯЕМ СТАТУС =====
+        // Просто сохраняем как есть
+        if (elder.getStatus() == null) {
+            elder.setStatus(ElderStatus.NEW);
         }
-        elder.setUpdatedAt(LocalDateTime.now());
         return elderRepository.save(elder);
     }
 
