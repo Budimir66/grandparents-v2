@@ -24,6 +24,8 @@ public class ElderFormService {
     private final NotificationService notificationService;
     private final BonusSettingService bonusSettingService;
     private final MessageSender messageSender;
+    // private static final Logger log = LoggerFactory.getLogger(ElderFormService.class);
+
 
     public ElderFormService(UserService userService,
                             ElderService elderService,
@@ -444,27 +446,75 @@ public class ElderFormService {
     /**
      * Удаление заявки
      */
+    /**
+     * Обрабатывает удаление заявки автором
+     */
+    /**
+     * Обрабатывает удаление заявки автором
+     */
     public UniversalResponse handleDeleteElder(Long userId, Long elderId) {
         Elder elder = elderService.findById(elderId);
         if (elder == null) {
-            return responseWithBackAndMainMenu("❌ Заявка не найдена.", "my_requests");
+            return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        if (!elder.getClientTelegramId().equals(userId)) {
-            return responseWithBackAndMainMenu("❌ Это не ваша заявка.", "my_requests");
+        // Проверяем, что пользователь — автор
+        if (elder.getCreatedBy() == null || !elder.getCreatedBy().equals(userId)) {
+            return responseWithMainMenu("❌ Вы не можете удалить эту заявку.");
         }
 
-        stateService.setTempElder(userId, elder);
-        stateService.setState(userId, DialogState.CONFIRM_DELETE_ELDER);
+        // Проверяем, что заявка не завершена и не удалена
+        if (elder.getStatus() == ElderStatus.COMPLETED ||
+                elder.getStatus() == ElderStatus.DELETED ||
+                elder.getStatus() == ElderStatus.EXPIRED) {
+            return responseWithMainMenu("❌ Заявка уже завершена или удалена.");
+        }
+
+        // ===== ЕСЛИ ЗАЯВКА В РАБОТЕ — СПИСЫВАЕМ БАЛЛЫ =====
+        if (elder.getAssignedOperatorId() != null) {
+            User author = userService.findById(userId);
+            if (author != null) {
+                // Списываем 3 балла
+                author.addBonusPoints(-3);
+                userService.saveUser(author);
+
+                // Уведомляем оператора, который вёл заявку
+                User operator = userService.findById(elder.getAssignedOperatorId());
+                if (operator != null) {
+                    try {
+                        UniversalResponse notification = new UniversalResponse(
+                                "❌ **Заявка #" + elderId + " удалена автором.**\n\n" +
+                                        "📋 Заявка была у вас в работе.\n" +
+                                        "💬 Автор удалил заявку. Баллы за неё списаны."
+                        );
+                        notification.addButtonFullRow("📋 Мои заявки", "my_requests");
+                        notification.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                        Long chatId = operator.getChatId() != null ? operator.getChatId() : operator.getTelegramId();
+                        messageSender.sendMessage(chatId, notification);
+                    } catch (Exception e) {
+                        log.error("❌ Ошибка отправки уведомления оператору: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
+        // ===== УДАЛЯЕМ ЗАЯВКУ =====
+        elder.setStatus(ElderStatus.DELETED);
+        elder.setUpdatedAt(LocalDateTime.now());
+        elderService.updateElder(elder);
+
+        // Очищаем состояние
+        stateService.clearState(userId);
 
         UniversalResponse response = new UniversalResponse(
-                "⚠️ **Вы уверены, что хотите удалить заявку #" + elderId + "?**\n\n" +
-                        "👤 " + elder.getFullName() + "\n" +
-                        "💰 " + elder.getBudget() + " руб.\n\n" +
-                        "Это действие нельзя отменить."
+                "✅ **Заявка #" + elderId + " удалена.**\n\n" +
+                        (elder.getAssignedOperatorId() != null ?
+                                "⚠️ Заявка была в работе. С вашего счёта списано 3 балла." :
+                                "Заявка успешно удалена.")
         );
-        response.addButton("✅ Да, удалить", "confirm_delete_yes");
-        response.addButton("❌ Нет, отменить", "confirm_delete_no");
+        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
 
@@ -472,24 +522,62 @@ public class ElderFormService {
      * Подтверждение удаления заявки
      */
     public UniversalResponse confirmDeleteElder(Long userId, boolean confirm) {
-        if (confirm) {
-            Elder elder = stateService.getTempElder(userId);
-            if (elder != null) {
-                elderService.deleteElder(elder.getId());
-                stateService.clearState(userId);
+        if (!confirm) {
+            return responseWithMainMenu("❌ Удаление отменено.");
+        }
 
-                UniversalResponse response = new UniversalResponse(
-                        "✅ Заявка #" + elder.getId() + " успешно удалена."
-                );
-                // ❌ УБИРАЕМ "Мои заявки" → заменяем на "Создать заявку"
-                response.addButton("📝 Создать заявку", "new_request");
-                response.addButton("🏠 Главное меню", "main_menu");
-                return response;
+        Elder elder = stateService.getTempElder(userId);
+        if (elder == null) {
+            return responseWithMainMenu("❌ Заявка не найдена.");
+        }
+
+        // Проверяем, что пользователь — автор
+        if (!elder.getCreatedBy().equals(userId)) {
+            return responseWithMainMenu("❌ Вы не можете удалить эту заявку.");
+        }
+
+        // Если заявка в работе — списываем баллы
+        if (elder.getAssignedOperatorId() != null) {
+            User author = userService.findById(userId);
+            if (author != null) {
+                author.addBonusPoints(-3);
+                userService.saveUser(author);
+
+                // Уведомляем оператора через messageSender напрямую
+                try {
+                    User operator = userService.findById(elder.getAssignedOperatorId());
+                    if (operator != null) {
+                        UniversalResponse notification = new UniversalResponse(
+                                "❌ **Заявка #" + elder.getId() + " удалена автором.**\n\n" +
+                                        "📋 Заявка была у вас в работе.\n" +
+                                        "💬 Автор удалил заявку. Баллы за неё списаны."
+                        );
+                        notification.addButtonFullRow("📋 Мои заявки", "my_requests");
+                        notification.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                        Long chatId = operator.getChatId() != null ? operator.getChatId() : operator.getTelegramId();
+                        messageSender.sendMessage(chatId, notification);
+                    }
+                } catch (Exception e) {
+                    log.error("❌ Ошибка отправки уведомления оператору: {}", e.getMessage());
+                }
             }
         }
 
+        // Удаляем заявку
+        elder.setStatus(ElderStatus.DELETED);
+        elderService.updateElder(elder);
         stateService.clearState(userId);
-        return responseWithBackAndMainMenu("❌ Удаление отменено.", "my_requests");
+
+        UniversalResponse response = new UniversalResponse(
+                "✅ **Заявка #" + elder.getId() + " удалена.**\n\n" +
+                        (elder.getAssignedOperatorId() != null ?
+                                "⚠️ Заявка была в работе. С вашего счёта списано 3 балла." :
+                                "Заявка успешно удалена.")
+        );
+        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
     }
     /**
      * Продление заявки

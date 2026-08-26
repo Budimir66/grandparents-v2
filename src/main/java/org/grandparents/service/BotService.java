@@ -2449,15 +2449,27 @@ public class BotService {
             }
         }
 
-        // ===== КНОПКИ ДЛЯ АВТОРА =====
+        // ===== КНОПКИ ДЛЯ АВТОРА (КЛИЕНТА ИЛИ ОПЕРАТОРА) =====
         if (isAuthor) {
-            if (elder.getAssignedOperatorId() == null) {
-                if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
-                    response.addButtonFullRow("✏️ Редактировать", "edit_elder_" + elderId);
+            // Показываем кнопки "Редактировать" и "Удалить", если заявка не завершена и не удалена
+            if (elder.getStatus() != ElderStatus.COMPLETED &&
+                    elder.getStatus() != ElderStatus.DELETED &&
+                    elder.getStatus() != ElderStatus.EXPIRED) {
+
+                // Всегда показываем "Редактировать"
+                response.addButtonFullRow("✏️ Редактировать", "edit_elder_" + elderId);
+
+                // "Удалить" — всегда, но с разными текстами
+                if (elder.getAssignedOperatorId() != null) {
+                    response.addButtonFullRow("🗑️ Удалить (заявка в работе, -3 балла)", "delete_elder_" + elderId);
+                } else {
                     response.addButtonFullRow("🗑️ Удалить", "delete_elder_" + elderId);
                 }
-            } else {
-                response.addButtonFullRow("📋 Мои заявки", "my_requests");
+            }
+
+            // Если заявка завершена — показываем только просмотр
+            if (elder.getStatus() == ElderStatus.COMPLETED) {
+                response.addButtonFullRow("✅ Заявка завершена", "main_menu");
             }
         }
 
@@ -3924,6 +3936,11 @@ public class BotService {
 
         // Все активные заявки
         List<Elder> allElders = elderService.findActiveElders();
+
+        // ===== СОРТИРУЕМ: НОВЫЕ СВЕРХУ =====
+        allElders = allElders.stream()
+                .sorted((e1, e2) -> e2.getCreatedAt().compareTo(e1.getCreatedAt()))
+                .collect(Collectors.toList());
 
         return allElders.stream()
                 .filter(elder -> !interestedElderIds.contains(elder.getId()))
