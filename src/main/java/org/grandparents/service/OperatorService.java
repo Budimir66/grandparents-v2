@@ -238,18 +238,24 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // ===== ПРОВЕРЯЕМ, ЧТО ЗАЯВКА В РАБОТЕ =====
+        // ===== ДИАГНОСТИКА В ЛОГ (ВАЖНО!) =====
+        log.info("🔍 [requestComplete] Заявка #{}, статус: {}, assigned_operator_ids: '{}'",
+                elderId, elder.getStatus(), elder.getAssignedOperatorIds());
+
+        // ===== 1. ПРОВЕРЯЕМ СТАТУС =====
         if (elder.getStatus() != ElderStatus.IN_PROGRESS) {
+            log.warn("⚠️ [requestComplete] Статус заявки #{} не IN_PROGRESS, а {}", elderId, elder.getStatus());
             return responseWithMainMenu("❌ Заявка не в работе.");
         }
 
-        // ===== ПРОВЕРЯЕМ, ЧТО ПОЛЬЗОВАТЕЛЬ ВЕДЁТ ЗАЯВКУ (НОВАЯ МОДЕЛЬ) =====
+        // ===== 2. ПРОВЕРЯЕМ, ЧТО ПОЛЬЗОВАТЕЛЬ ВЕДЁТ ЗАЯВКУ =====
         boolean isAssigned = false;
         if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
             String[] ids = elder.getAssignedOperatorIds().split(",");
             for (String id : ids) {
                 if (id.trim().equals(String.valueOf(userId))) {
                     isAssigned = true;
+                    log.info("✅ [requestComplete] Пользователь {} найден в assigned_operator_ids", userId);
                     break;
                 }
             }
@@ -258,13 +264,17 @@ public class OperatorService {
         // Если не нашли в assigned_operator_ids, проверяем старую модель
         if (!isAssigned && elder.getAssignedOperatorId() != null) {
             isAssigned = elder.getAssignedOperatorId().equals(userId);
+            if (isAssigned) {
+                log.info("✅ [requestComplete] Пользователь {} найден в assigned_operator_id (старая модель)", userId);
+            }
         }
 
         if (!isAssigned) {
+            log.warn("⚠️ [requestComplete] Пользователь {} НЕ найден в assigned_operator_ids: '{}'", userId, elder.getAssignedOperatorIds());
             return responseWithMainMenu("❌ Эта заявка не находится у вас в работе.");
         }
 
-        // ===== ПРОВЕРЯЕМ, ЧТО АВТОР НЕ РАВЕН ОПЕРАТОРУ =====
+        // ===== 3. ПРОВЕРЯЕМ, ЧТО АВТОР НЕ РАВЕН ОПЕРАТОРУ =====
         Long authorId = elder.getCreatedBy();
         if (authorId == null) {
             return responseWithMainMenu("❌ У заявки нет автора.");
@@ -274,7 +284,7 @@ public class OperatorService {
             return responseWithMainMenu("❌ Вы не можете отправить запрос на закрытие своей заявки.");
         }
 
-        // ===== ОТПРАВЛЯЕМ ЗАПРОС АВТОРУ =====
+        // ===== 4. ОТПРАВЛЯЕМ ЗАПРОС АВТОРУ =====
         User author = userService.findById(authorId);
         if (author == null) {
             return responseWithMainMenu("❌ Автор не найден.");
@@ -283,7 +293,6 @@ public class OperatorService {
         User operator = userService.findById(userId);
         String operatorName = operator != null ? operator.getFirstName() : "Оператор";
 
-        // Формируем сообщение для автора
         String message = "🏁 **Запрос на закрытие заявки!**\n\n" +
                 "Оператор " + operatorName + " сообщает, что ваш подопечный **" + elder.getFullName() + "** заселился в пансионат.\n\n" +
                 "Подтвердите закрытие заявки.\n\n" +
@@ -299,7 +308,7 @@ public class OperatorService {
         Long chatId = author.getChatId() != null ? author.getChatId() : author.getTelegramId();
         messageSender.sendMessage(chatId, response);
 
-        // ===== ОТВЕТ ОПЕРАТОРУ =====
+        // ===== 5. ОТВЕТ ОПЕРАТОРУ =====
         return responseWithMainMenu("📨 Запрос на закрытие заявки #" + elderId + " отправлен " + author.getFirstName() + ".\n\n" +
                 "⏳ Статус заявки: **Ожидает подтверждения**\n\n" +
                 "Вы получите уведомление, когда клиент подтвердит закрытие.");
