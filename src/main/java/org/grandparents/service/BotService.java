@@ -2424,13 +2424,15 @@ public class BotService {
             if (viewingFromInterested) {
                 response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
             } else {
-                // Обычный режим — показываем стандартные кнопки
-                if (elder.getAssignedOperatorId() == null) {
-                    if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
-                        response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
-                        response.addButtonFullRow("👍 Интересно", "interested_elder_" + elderId);
-                        response.addButtonFullRow("👎 Не подходит", "not_interested_elder_" + elderId);
-                    }
+                // ===== ПОКАЗЫВАЕМ КНОПКИ ВСЕГДА, ЕСЛИ ЗАЯВКА АКТИВНА =====
+                if (elder.getStatus() == ElderStatus.NEW ||
+                        elder.getStatus() == ElderStatus.OFFERED ||
+                        elder.getStatus() == ElderStatus.IN_PROGRESS) {
+
+                    // Кнопка "Взять в работу" — всегда доступна
+                    response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
+                    response.addButtonFullRow("👍 Интересно", "interested_elder_" + elderId);
+                    response.addButtonFullRow("👎 Не подходит", "not_interested_elder_" + elderId);
                 }
             }
 
@@ -2441,7 +2443,7 @@ public class BotService {
                 response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
             }
 
-            // Кнопка "Связаться через MAX" (если заявка в работе)
+            // Кнопка "Связаться через MAX" (если заявка в работе у этого оператора)
             if (isAssigned && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);

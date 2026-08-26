@@ -196,38 +196,6 @@ public class ElderService {
         return elderRepository.findAll();
     }
 
-    // ===== ФИНАНСЫ =====
-
-    @Transactional
-    public void completeElderWithPrice(Long elderId, Double price) {
-        Elder elder = findById(elderId);
-        if (elder == null) {
-            throw new RuntimeException("Заявка не найдена");
-        }
-
-        elder.setPrice(price);
-        elder.setStatus(ElderStatus.COMPLETED);
-        elder.setCompletedAt(LocalDateTime.now());
-        elderRepository.save(elder);
-
-        // Начисляем доход оператору
-        if (elder.getAssignedOperatorId() != null) {
-            User operator = userService.findByTelegramId(elder.getAssignedOperatorId()).orElse(null);
-            if (operator != null) {
-                operator.addRevenue(price);
-                userService.saveUser(operator);
-            }
-        }
-
-        // Начисляем доход пансионату
-        if (elder.getCareHomeId() != null) {
-            CareHome careHome = careHomeService.findById(elder.getCareHomeId());
-            if (careHome != null) {
-                careHome.addMonthlyRevenue(price);
-                careHomeService.save(careHome);
-            }
-        }
-    }
     public List<Elder> findActiveEldersSortedByDate() {
         return elderRepository.findByStatusNotInOrderByCreatedAtDesc(
                 List.of(ElderStatus.COMPLETED, ElderStatus.DELETED, ElderStatus.EXPIRED)

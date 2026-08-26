@@ -345,65 +345,22 @@ public class OperatorService {
             return responseWithMainMenu("❌ Вы не можете закрыть эту заявку.");
         }
 
-        // ===== НАЧИСЛЯЕМ БОНУСЫ =====
-        User operator = null;
-        StringBuilder bonusInfo = new StringBuilder();
-
-        if (elder.getAssignedOperatorId() != null) {
-            operator = getUserOrNull(elder.getAssignedOperatorId());
-            if (operator != null) {
-                int completeBonus = bonusSettingService.getBonusValue("complete_elder");
-                operator.setBonusPoints(operator.getBonusPoints() + completeBonus);
-                operator.incrementTotalCompleted();
-                userService.saveUser(operator);
-                bonusInfo.append("👤 **Оператор** ").append(operator.getFirstName())
-                        .append(" получил **+").append(completeBonus).append(" баллов**!\n");
-            }
-        }
-
-        if (elder.getCreatedBy() != null &&
-                elder.getAssignedOperatorId() != null &&
-                !elder.getCreatedBy().equals(elder.getAssignedOperatorId())) {
-
-            User author = getUserOrNull(elder.getCreatedBy());
-            if (author != null && isOperator(author)) {
-                int authorBonus = bonusSettingService.getBonusValue("author_complete");
-                author.setBonusPoints(author.getBonusPoints() + authorBonus);
-                userService.saveUser(author);
-                bonusInfo.append("👤 **Автор заявки** ").append(author.getFirstName())
-                        .append(" получил **+").append(authorBonus).append(" баллов** за заселение!\n");
-            }
-        }
-
         // ===== ЗАКРЫВАЕМ ЗАЯВКУ =====
         elder.setStatus(ElderStatus.COMPLETED);
         elder.setCompletedBy(userId);
         elder.setCompletedAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
-        // ===== УВЕДОМЛЯЕМ ОПЕРАТОРА (ЕСЛИ ОН НЕ ТОТ, КТО ЗАКРЫЛ) =====
-        if (operator != null && !operator.getTelegramId().equals(userId)) {
-            UniversalResponse notifyOperator = new UniversalResponse(
-                    "🎉 Заявка #" + elderId + " успешно закрыта!\n\n" +
-                            "Вы получили +5 баллов за закрытие заявки!"
-            );
-            notifyOperator.addButton("📋 Мои заявки", "my_requests");
-            notifyOperator.addButton("🏠 Главное меню", "main_menu");
-            messageSender.sendMessage(operator.getTelegramId(), notifyOperator);
-        }
-
-        // ===== ОТВЕТ ТОМУ, КТО ЗАКРЫЛ =====
+        // ===== ОТВЕТ =====
         String message = "🏁 **Заявка #" + elderId + " закрыта!**\n\n" +
                 "📋 **Информация о заявке:**\n" +
                 "👤 **Подопечный:** " + elder.getFullName() + "\n" +
                 "👤 **Клиент:** " + elder.getClientFirstName() + "\n\n" +
-                "💰 **Начислено баллов:**\n" +
-                bonusInfo.toString() + "\n" +
                 "✅ Заявка успешно завершена!";
 
         UniversalResponse response = new UniversalResponse(message);
-        response.addButton("📋 Мои заявки", "my_requests");
-        response.addButton("🏠 Главное меню", "main_menu");
+        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
 
