@@ -350,7 +350,6 @@ public class OperatorService {
         }
 
         // ===== ОПРЕДЕЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ИНИЦИИРОВАЛ ЗАКРЫТИЕ =====
-        // Берём из assigned_operator_ids (первый оператор, который взял заявку)
         Long requestingOperatorId = null;
         if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
             String[] ids = elder.getAssignedOperatorIds().split(",");
@@ -374,14 +373,26 @@ public class OperatorService {
         elder.setCompletedAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
+        // ============================================================
         // ===== УВЕДОМЛЯЕМ ОПЕРАТОРА, КОТОРЫЙ ИНИЦИИРОВАЛ ЗАКРЫТИЕ =====
+        // ============================================================
         if (requestingOperatorId != null && !requestingOperatorId.equals(userId)) {
             User operator = userService.findById(requestingOperatorId);
             if (operator != null) {
-                String authorName = getUserOrNull(userId) != null ? getUserOrNull(userId).getFirstName() : "Клиент";
+                // Получаем имя того, кто подтвердил (автор или клиент)
+                String confirmatorName = "Клиент";
+                if (isAuthor) {
+                    User author = userService.findById(userId);
+                    confirmatorName = author != null ? author.getFirstName() : "Автор";
+                } else if (isClient) {
+                    confirmatorName = "Клиент";
+                } else {
+                    confirmatorName = "Пользователь";
+                }
+
                 UniversalResponse notification = new UniversalResponse(
                         "🎉 **Заявка #" + elderId + " закрыта!**\n\n" +
-                                "✅ Автор **" + authorName + "** подтвердил заселение.\n" +
+                                "✅ " + confirmatorName + " подтвердил заселение.\n" +
                                 "📋 **Подопечный:** " + elder.getFullName() + "\n" +
                                 "🏢 **Пансионат:** " + getCareHomeName(elder.getCareHomeId()) + "\n\n" +
                                 "💰 Вы получили **+5 баллов** за успешное закрытие заявки!"

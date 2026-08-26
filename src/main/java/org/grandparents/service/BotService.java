@@ -3181,10 +3181,12 @@ public class BotService {
             }
 
             case "in_progress" -> {
-                List<Elder> allActive = elderService.findActiveElders();
+                List<Elder> allActive = elderService.findActiveElders(); // Все активные заявки (не COMPLETED, DELETED, EXPIRED)
                 elders = allActive.stream()
                         .filter(isOperatorAssigned)
                         .filter(elder -> elder.getCreatedBy() == null || !elder.getCreatedBy().equals(userId))
+                        // ===== ДОБАВЛЯЕМ ФИЛЬТР: ТОЛЬКО IN_PROGRESS =====
+                        .filter(elder -> elder.getStatus() == ElderStatus.IN_PROGRESS)
                         .collect(Collectors.toList());
                 title = "📋 **Заявки в работе**\n\nЗаявки, которые вы взяли:";
             }
