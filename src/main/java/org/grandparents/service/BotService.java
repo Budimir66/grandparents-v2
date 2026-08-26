@@ -3143,49 +3143,80 @@ public class BotService {
     }
 
     private UniversalResponse showMyRequestsByType(Long userId, String type) {
+        User user = getUserOrNull(userId);
+        if (user == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
         List<Elder> elders = new ArrayList<>();
         String title = "";
 
+        // ============================================================
+        // ===== ВСПОМОГАТЕЛЬНЫЙ МЕТОД ДЛЯ ПРОВЕРКИ =====
+        // Проверяет, есть ли оператор в assigned_operator_ids
+        // ============================================================
+        java.util.function.Predicate<Elder> isOperatorAssigned = elder -> {
+            // Проверяем новое поле assigned_operator_ids
+            if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+                String[] ids = elder.getAssignedOperatorIds().split(",");
+                for (String id : ids) {
+                    if (id.trim().equals(String.valueOf(userId))) {
+                        return true;
+                    }
+                }
+            }
+            // Проверяем старое поле assigned_operator_id (для совместимости)
+            return elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId);
+        };
+
         switch (type) {
             case "created" -> {
-                stateService.setViewingFromInterested(userId, false);
                 elders = elderService.findByCreatedBy(userId);
+                // Исключаем заявки, которые оператор взял сам
+                elders = elders.stream()
+                        .filter(elder -> !isOperatorAssigned.test(elder))
+                        .collect(Collectors.toList());
                 title = "📤 **Переданные заявки**\n\nЗаявки, которые вы создали:";
             }
+
             case "in_progress" -> {
-                stateService.setViewingFromInterested(userId, false);
-                List<Elder> allInProgress = elderService.findByAssignedOperatorId(userId);
-                elders = allInProgress.stream()
-                        .filter(e -> e.getCreatedBy() == null || !e.getCreatedBy().equals(userId))
+                List<Elder> allActive = elderService.findActiveElders();
+                elders = allActive.stream()
+                        .filter(isOperatorAssigned)
+                        .filter(elder -> elder.getCreatedBy() == null || !elder.getCreatedBy().equals(userId))
                         .collect(Collectors.toList());
                 title = "📋 **Заявки в работе**\n\nЗаявки, которые вы взяли:";
             }
-            case "interested" -> {
-                // Устанавливаем флаг, что оператор смотрит из раздела "Интересные заявки"
-                stateService.setViewingFromInterested(userId, true);
 
+            case "interested" -> {
                 List<OperatorReaction> reactions = reactionRepository
                         .findByOperatorIdAndReaction(userId, "INTERESTED");
                 for (OperatorReaction reaction : reactions) {
                     Elder elder = elderService.findById(reaction.getElderId());
-                    if (elder != null && elder.getAssignedOperatorId() == null) {
-                        if (elder.getCreatedBy() == null || !elder.getCreatedBy().equals(userId)) {
-                            elders.add(elder);
-                        }
+                    if (elder != null && !isOperatorAssigned.test(elder)) {
+                        elders.add(elder);
                     }
                 }
                 title = "⭐ **Интересные заявки**\n\nЗаявки, которые вас заинтересовали:";
             }
+
             case "completed" -> {
-                stateService.setViewingFromInterested(userId, false);
-                elders = elderService.findByCompletedBy(userId);
+                // Ищем заявки, где оператор есть в assigned_operator_ids И статус COMPLETED
+                List<Elder> allCompleted = elderService.findByStatus(ElderStatus.COMPLETED);
+                elders = allCompleted.stream()
+                        .filter(isOperatorAssigned)
+                        .collect(Collectors.toList());
                 title = "✅ **Завершённые заявки**\n\nЗаявки, которые вы закрыли:";
             }
+
             default -> {
                 return responseWithBackAndMainMenu("❌ Неизвестный раздел.", "my_requests");
             }
         }
 
+        // ============================================================
+        // ФОРМИРУЕМ ОТВЕТ
+        // ============================================================
         if (elders.isEmpty()) {
             UniversalResponse response = new UniversalResponse(title + "\n\n📭 Здесь пока пусто.");
             response.addButtonFullRow("📋 Мои заявки", "my_requests");
@@ -3195,16 +3226,18 @@ public class BotService {
 
         UniversalResponse response = new UniversalResponse(title);
 
+        // Показываем до 10 заявок
         int maxButtons = Math.min(elders.size(), 10);
         for (int i = 0; i < maxButtons; i++) {
             Elder elder = elders.get(i);
-            // ===== КОМПАКТНАЯ КНОПКА БЕЗ ЗНАЧКОВ =====
             String buttonText = elder.getFullName() + " | " + elder.getBudget() + " руб. | " + elder.getAge() + " лет";
             response.addButtonFullRow(buttonText, "view_elder_" + elder.getId());
         }
 
+        // Если заявок больше 10, сохраняем список в searchResults для пагинации
         if (elders.size() > 10) {
             response.addButtonFullRow("📋 Показать ещё...", "find_requests_more");
+            stateService.setSearchResults(userId, elders);
         }
 
         response.addButtonFullRow("📋 Мои заявки", "my_requests");
