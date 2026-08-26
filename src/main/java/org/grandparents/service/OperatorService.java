@@ -238,81 +238,69 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        if (elder.getAssignedOperatorId() == null || !elder.getAssignedOperatorId().equals(userId)) {
+        // Проверяем, что заявка в работе
+        if (elder.getStatus() != ElderStatus.IN_PROGRESS) {
+            return responseWithMainMenu("❌ Заявка не в работе.");
+        }
+
+        // ===== ПРОВЕРЯЕМ, ЧТО ПОЛЬЗОВАТЕЛЬ ВЕДЁТ ЗАЯВКУ =====
+        boolean isAssigned = false;
+        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            for (String id : ids) {
+                if (id.trim().equals(String.valueOf(userId))) {
+                    isAssigned = true;
+                    break;
+                }
+            }
+        }
+
+        // Если не нашли в assigned_operator_ids, проверяем старую модель
+        if (!isAssigned && elder.getAssignedOperatorId() != null) {
+            isAssigned = elder.getAssignedOperatorId().equals(userId);
+        }
+
+        if (!isAssigned) {
             return responseWithMainMenu("❌ Эта заявка не находится у вас в работе.");
         }
 
-        if (elder.getStatus() != ElderStatus.IN_PROGRESS) {
-            return responseWithMainMenu("❌ Заявка уже закрыта или не в работе.");
+        // Проверяем, что автор не равен оператору
+        Long authorId = elder.getCreatedBy();
+        if (authorId == null) {
+            return responseWithMainMenu("❌ У заявки нет автора.");
         }
 
-        User operator = getUserOrNull(userId);
-        if (!isOperator(operator)) {
-            return responseWithMainMenu("❌ Только операторы могут отправлять запросы.");
+        if (authorId.equals(userId)) {
+            return responseWithMainMenu("❌ Вы не можете отправить запрос на закрытие своей заявки.");
         }
 
-        // ===== МЕНЯЕМ СТАТУС НА "ОЖИДАНИЕ ПОДТВЕРЖДЕНИЯ" =====
-        elder.setStatus(ElderStatus.AWAITING_CONFIRMATION);
-        elderService.updateElder(elder);
-
-        Long recipientId;
-        String recipientName;
-        boolean isAuthorOperator;
-
-        if (elder.getCreatedBy() != null) {
-            User author = getUserOrNull(elder.getCreatedBy());
-            if (author != null && isOperator(author)) {
-                recipientId = author.getTelegramId();
-                recipientName = author.getFirstName();
-                isAuthorOperator = true;
-            } else {
-                recipientId = elder.getClientTelegramId();
-                recipientName = elder.getClientFirstName() != null ? elder.getClientFirstName() : "Клиент";
-                isAuthorOperator = false;
-            }
-        } else {
-            recipientId = elder.getClientTelegramId();
-            recipientName = elder.getClientFirstName() != null ? elder.getClientFirstName() : "Клиент";
-            isAuthorOperator = false;
+        // ===== ОТПРАВЛЯЕМ ЗАПРОС АВТОРУ =====
+        User author = userService.findById(authorId);
+        if (author == null) {
+            return responseWithMainMenu("❌ Автор не найден.");
         }
 
-        String careHomeName = "пансионат";
-        if (operator.getCareHomeId() != null) {
-            CareHome careHome = careHomeService.findById(operator.getCareHomeId());
-            if (careHome != null) {
-                careHomeName = careHome.getName();
-            }
-        }
+        User operator = userService.findById(userId);
+        String operatorName = operator != null ? operator.getFirstName() : "Оператор";
 
-        String notificationText = "🏁 **Запрос на закрытие заявки!**\n\n" +
-                "Оператор " + operator.getFirstName() + " сообщает, что ваш подопечный **" + elder.getFullName() +
-                "** заселился в пансионат **" + careHomeName + "**.\n\n" +
+        String message = "🏁 **Запрос на закрытие заявки!**\n\n" +
+                "Оператор " + operatorName + " сообщает, что ваш подопечный **" + elder.getFullName() + "** заселился в пансионат **" + getCareHomeName(elder.getCareHomeId()) + "**.\n\n" +
                 "Подтвердите закрытие заявки.\n\n" +
+                "💰 Оператор получит +5 баллов.\n" +
+                "📌 Вы получите +3 балла как автор заявки.\n\n" +
                 "Подтверждаете?";
 
-        UniversalResponse notifyResponse = new UniversalResponse(notificationText);
-        notifyResponse.addButton("✅ Да, подтверждаю", "confirm_complete_elder_" + elderId);
-        notifyResponse.addButton("❌ Нет, ещё нет", "reject_complete_elder_" + elderId);
+        UniversalResponse response = new UniversalResponse(message);
+        response.addButtonFullRow("✅ Да, подтверждаю", "confirm_complete_elder_" + elderId);
+        response.addButtonFullRow("❌ Нет, ещё нет", "reject_complete_elder_" + elderId);
 
-        try {
-            User recipientUser = getUserOrNull(recipientId);
-            Long recipientChatId = recipientUser != null && recipientUser.getChatId() != null
-                    ? recipientUser.getChatId()
-                    : recipientId;
-            messageSender.sendMessage(recipientChatId, notifyResponse);
-            log.info("📨 Уведомление отправлено получателю {} (chatId={})", recipientId, recipientChatId);
-        } catch (Exception e) {
-            log.error("❌ Ошибка отправки уведомления: {}", e.getMessage(), e);
-        }
+        // Отправляем автору
+        Long chatId = author.getChatId() != null ? author.getChatId() : author.getTelegramId();
+        messageSender.sendMessage(chatId, response);
 
-        UniversalResponse response = new UniversalResponse(
-                "📨 Запрос на закрытие заявки #" + elderId + " отправлен " + recipientName + ".\n\n" +
-                        "⏳ Статус заявки: **Ожидает подтверждения**\n\n" +
-                        "Вы получите уведомление, когда клиент подтвердит закрытие."
-        );
-        response.addButton("📋 Мои заявки", "my_requests");
-        response.addButton("🏠 Главное меню", "main_menu");
-        return response;
+        return responseWithMainMenu("📨 Запрос на закрытие заявки #" + elderId + " отправлен " + author.getFirstName() + ".\n\n" +
+                "⏳ Статус заявки: **Ожидает подтверждения**\n\n" +
+                "Вы получите уведомление, когда клиент подтвердит закрытие.");
     }
 
     // ============================================================

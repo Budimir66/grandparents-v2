@@ -2389,6 +2389,7 @@ public class BotService {
         boolean isAuthor = elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId);
         boolean isAssigned = elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId);
 
+
         // ===== ПРОВЕРЯЕМ, ОТКРЫЛ ЛИ ОПЕРАТОР ЗАЯВКУ ИЗ "ИНТЕРЕСНЫХ" =====
         boolean viewingFromInterested = stateService.isViewingFromInterested(userId);
 
@@ -2508,7 +2509,22 @@ public class BotService {
                 }
             }
         }
+// ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЕДЁТ ЗАЯВКУ =====
+        boolean isAssignedToElder = false;
+        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            for (String id : ids) {
+                if (id.trim().equals(String.valueOf(userId))) {
+                    isAssignedToElder = true;
+                    break;
+                }
+            }
+        }
 
+        if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
+            response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
+            response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
+        }
         // ===== ОБЩИЕ КНОПКИ =====
         if (viewingFromInterested) {
             response.addButtonFullRow("⭐ Интересные заявки", "my_requests_interested");
