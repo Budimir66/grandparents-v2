@@ -2373,7 +2373,6 @@ public class BotService {
         response.addButton("❌ Отменить", "cancel_action");
         return response;
     }
-
     private UniversalResponse handleViewElder(Long userId, String callbackData) {
         String elderIdStr = callbackData.substring("view_elder_".length());
         Long elderId = Long.parseLong(elderIdStr);
@@ -2388,7 +2387,6 @@ public class BotService {
         boolean isAdmin = isAdmin(user);
         boolean isAuthor = elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId);
         boolean isAssigned = elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId);
-
 
         // ===== ПРОВЕРЯЕМ, ОТКРЫЛ ЛИ ОПЕРАТОР ЗАЯВКУ ИЗ "ИНТЕРЕСНЫХ" =====
         boolean viewingFromInterested = stateService.isViewingFromInterested(userId);
@@ -2421,31 +2419,40 @@ public class BotService {
 
         // ===== КНОПКИ ДЛЯ ОПЕРАТОРА =====
         if (isOperator && !isAuthor) {
-            // ===== ЕСЛИ ОПЕРАТОР СМОТРИТ ИЗ "ИНТЕРЕСНЫХ" =====
             if (viewingFromInterested) {
                 response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
             } else {
-                // ===== ПОКАЗЫВАЕМ КНОПКИ ВСЕГДА, ЕСЛИ ЗАЯВКА АКТИВНА =====
+                // ===== КНОПКИ ПОКАЗЫВАЕМ ВСЕГДА, ЕСЛИ ЗАЯВКА АКТИВНА =====
                 if (elder.getStatus() == ElderStatus.NEW ||
                         elder.getStatus() == ElderStatus.OFFERED ||
                         elder.getStatus() == ElderStatus.IN_PROGRESS) {
 
-                    // Кнопка "Взять в работу" — всегда доступна
                     response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
                     response.addButtonFullRow("👍 Интересно", "interested_elder_" + elderId);
                     response.addButtonFullRow("👎 Не подходит", "not_interested_elder_" + elderId);
                 }
             }
 
-            // ===== НОВАЯ КНОПКА: ПОЖАЛОВАТЬСЯ =====
+            // ===== КНОПКА "ПОЖАЛОВАТЬСЯ" =====
             if (elder.getStatus() != ElderStatus.COMPLETED &&
                     elder.getStatus() != ElderStatus.DELETED &&
                     elder.getStatus() != ElderStatus.EXPIRED) {
                 response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
             }
 
-            // Кнопка "Связаться через MAX" (если заявка в работе у этого оператора)
-            if (isAssigned && elder.getStatus() == ElderStatus.IN_PROGRESS) {
+            // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЕДЁТ ЗАЯВКУ =====
+            boolean isAssignedToElder = false;
+            if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+                String[] ids = elder.getAssignedOperatorIds().split(",");
+                for (String id : ids) {
+                    if (id.trim().equals(String.valueOf(userId))) {
+                        isAssignedToElder = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
             }
@@ -2453,78 +2460,24 @@ public class BotService {
 
         // ===== ЕСЛИ ОПЕРАТОР ЗАВЕРШИЛ ЗАЯВКУ — ПОКАЗАТЬ КНОПКУ ДЛЯ ОЦЕНКИ =====
         if (isOperator && isAssigned && elder.getStatus() == ElderStatus.COMPLETED) {
-            // Проверяем, не оценил ли уже оператор эту заявку
             boolean alreadyRated = ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent();
             if (!alreadyRated) {
                 response.addButtonFullRow("⭐ Оценить автора", "rate_author_" + elderId);
             }
         }
 
-        // ===== КНОПКИ ДЛЯ АВТОРА (КЛИЕНТА ИЛИ ОПЕРАТОРА) =====
+        // ===== КНОПКИ ДЛЯ АВТОРА =====
         if (isAuthor) {
-            // Показываем кнопки "Редактировать" и "Удалить", если заявка не завершена и не удалена
-            if (elder.getStatus() != ElderStatus.COMPLETED &&
-                    elder.getStatus() != ElderStatus.DELETED &&
-                    elder.getStatus() != ElderStatus.EXPIRED) {
-
-                // Всегда показываем "Редактировать"
-                response.addButtonFullRow("✏️ Редактировать", "edit_elder_" + elderId);
-
-                // "Удалить" — всегда, но с разными текстами
-                if (elder.getAssignedOperatorId() != null) {
-                    response.addButtonFullRow("🗑️ Удалить (заявка в работе, -3 балла)", "delete_elder_" + elderId);
-                } else {
+            if (elder.getAssignedOperatorId() == null) {
+                if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
+                    response.addButtonFullRow("✏️ Редактировать", "edit_elder_" + elderId);
                     response.addButtonFullRow("🗑️ Удалить", "delete_elder_" + elderId);
                 }
-            }
-
-            // Если заявка завершена — показываем только просмотр
-            if (elder.getStatus() == ElderStatus.COMPLETED) {
-                response.addButtonFullRow("✅ Заявка завершена", "main_menu");
+            } else {
+                response.addButtonFullRow("📋 Мои заявки", "my_requests");
             }
         }
 
-        // ===== ПОКАЗЫВАЕМ ОПЕРАТОРОВ, КОТОРЫЕ ВЗЯЛИ ЗАЯВКУ =====
-        String assignedIds = elder.getAssignedOperatorIds();
-        if (assignedIds != null && !assignedIds.isEmpty()) {
-            List<String> operatorIds = Arrays.asList(assignedIds.split(","));
-            if (!operatorIds.isEmpty()) {
-                response.addButtonFullRow("━━━━━━━━━━━━━━━━━━━━━━━", "separator");
-                response.addButtonFullRow("📞 **Операторы, готовые помочь:**", "separator");
-
-                for (String idStr : operatorIds) {
-                    try {
-                        Long operatorId = Long.parseLong(idStr);
-                        User operator = userService.findById(operatorId);
-                        if (operator != null) {
-                            String contactInfo = operator.getFirstName();
-                            if (operator.getPhone() != null) {
-                                contactInfo += " | 📱 " + operator.getPhone();
-                            }
-                            response.addButtonFullRow("📞 " + contactInfo, "contact_operator_" + operatorId);
-                        }
-                    } catch (NumberFormatException e) {
-                        log.warn("⚠️ Неверный ID оператора: {}", idStr);
-                    }
-                }
-            }
-        }
-// ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЕДЁТ ЗАЯВКУ =====
-        boolean isAssignedToElder = false;
-        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
-            String[] ids = elder.getAssignedOperatorIds().split(",");
-            for (String id : ids) {
-                if (id.trim().equals(String.valueOf(userId))) {
-                    isAssignedToElder = true;
-                    break;
-                }
-            }
-        }
-
-        if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
-            response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
-            response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
-        }
         // ===== ОБЩИЕ КНОПКИ =====
         if (viewingFromInterested) {
             response.addButtonFullRow("⭐ Интересные заявки", "my_requests_interested");
@@ -2535,7 +2488,6 @@ public class BotService {
 
         return response;
     }
-
     // ============================================================
     // ===== МЕТОДЫ ДЛЯ РАБОТЫ С ПАНСИОНАТАМИ (АДМИН) =====
     // ============================================================
