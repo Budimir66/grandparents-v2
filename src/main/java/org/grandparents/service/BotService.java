@@ -419,6 +419,35 @@ public class BotService {
             return handleRequestContactFromMax(userId);
         }
 
+        if (callbackData.equals("confirm_delete_completed_yes")) {
+            Elder elder = stateService.getTempElder(userId);
+            if (elder == null) {
+                return responseWithMainMenu("❌ Заявка не найдена.");
+            }
+            elderService.deleteElder(elder.getId());
+            stateService.clearState(userId);
+            return responseWithMainMenu("✅ Заявка #" + elder.getId() + " удалена.");
+        }
+
+        if (callbackData.equals("confirm_delete_completed_no")) {
+            stateService.clearState(userId);
+            return responseWithMainMenu("❌ Удаление отменено.");
+        }
+
+        // ===== УДАЛЕНИЕ ЗАВЕРШЁННОЙ ЗАЯВКИ =====
+        if (callbackData.startsWith("delete_completed_elder_")) {
+            String elderIdStr = callbackData.substring("delete_completed_elder_".length());
+            Long elderId = Long.parseLong(elderIdStr);
+            return handleDeleteCompletedElder(userId, elderId);
+        }
+
+        // ===== ОЦЕНКА ЗАЯВКИ (ДЛЯ ОПЕРАТОРОВ) =====
+        if (callbackData.startsWith("rate_elder_")) {
+            String elderIdStr = callbackData.substring("rate_elder_".length());
+            Long elderId = Long.parseLong(elderIdStr);
+            return handleRateElder(userId, elderId);
+        }
+
         // ===== СВЯЗАТЬСЯ С ОПЕРАТОРОМ =====
         if (callbackData.startsWith("contact_operator_")) {
             String operatorIdStr = callbackData.substring("contact_operator_".length());
@@ -2417,9 +2446,27 @@ public class BotService {
         // ===== СОЗДАЁМ ОТВЕТ =====
         UniversalResponse response = new UniversalResponse(card);
 
+        // ===== КНОПКИ ДЛЯ ЗАВЕРШЁННЫХ ЗАЯВОК =====
+        if (elder.getStatus() == ElderStatus.COMPLETED && isOperator) {
+            // Проверяем, что оператор вёл эту заявку
+            isAssigned = false;
+            if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+                String[] ids = elder.getAssignedOperatorIds().split(",");
+                for (String id : ids) {
+                    if (id.trim().equals(String.valueOf(userId))) {
+                        isAssigned = true;
+                        break;
+                    }
+                }
+            }
+            if (isAssigned) {
+                response.addButtonFullRow("🗑️ Удалить заявку", "delete_completed_elder_" + elderId);
+            }
+        }
+
         // ===== КНОПКИ ДЛЯ ОПЕРАТОРА =====
         if (isOperator && !isAuthor) {
-            // ===== ПРОВЕРЯЕМ, ВЗЯЛ ЛИ УЖЕ ОПЕРАТОР ЭТУ ЗАЯВКУ (ОБЪЯВЛЯЕМ ЗДЕСЬ!) =====
+            // ===== ОБЪЯВЛЯЕМ ПЕРЕМЕННУЮ ЗДЕСЬ (ОДИН РАЗ) =====
             boolean isAssignedToElder = false;
             if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
                 String[] ids = elder.getAssignedOperatorIds().split(",");
@@ -2442,23 +2489,32 @@ public class BotService {
                             elder.getStatus() == ElderStatus.IN_PROGRESS) {
 
                         response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
-                        response.addButtonFullRow("👍 Интересно", "interested_elder_" + elderId);
-                        response.addButtonFullRow("👎 Не подходит", "not_interested_elder_" + elderId);
+                        // "Интересно" и "Не подходит" в одной строке
+                        response.addButton("👍 Интересно", "interested_elder_" + elderId);
+                        response.addButton("👎 Не подходит", "not_interested_elder_" + elderId);
                     }
                 }
             }
 
-            // ===== КНОПКА "ПОЖАЛОВАТЬСЯ" (ВСЕГДА, ЕСЛИ ЗАЯВКА АКТИВНА) =====
-            if (elder.getStatus() != ElderStatus.COMPLETED &&
-                    elder.getStatus() != ElderStatus.DELETED &&
-                    elder.getStatus() != ElderStatus.EXPIRED) {
-                response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
-            }
+            // ===== УБИРАЕМ "Пожаловаться" =====
+            // response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
 
             // ===== КНОПКИ ДЛЯ ОПЕРАТОРА, КОТОРЫЙ УЖЕ ВЗЯЛ ЗАЯВКУ =====
             if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
+
+                // ===== ЕСЛИ ЗАЯВКА СОЗДАНА ОПЕРАТОРОМ — ДОБАВЛЯЕМ "ОЦЕНИТЬ ЗАЯВКУ" =====
+                if (elder.getCreatedBy() != null) {
+                    User author = getUserOrNull(elder.getCreatedBy());
+                    if (author != null && isOperator(author)) {
+                        // Проверяем, не оценил ли уже
+                        boolean alreadyRated = ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent();
+                        if (!alreadyRated) {
+                            response.addButtonFullRow("⭐ Оценить заявку", "rate_elder_" + elderId);
+                        }
+                    }
+                }
             }
         }
 
@@ -4493,6 +4549,101 @@ public class BotService {
         UniversalResponse response = new UniversalResponse(contactInfo);
         response.addButtonFullRow("🔙 Назад к заявке", "my_request");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
+    }
+    private UniversalResponse handleRateElder(Long userId, Long elderId) {
+        Elder elder = elderService.findById(elderId);
+        if (elder == null) {
+            return responseWithMainMenu("❌ Заявка не найдена.");
+        }
+
+        // Проверяем, что заявка завершена
+        if (elder.getStatus() != ElderStatus.COMPLETED) {
+            return responseWithMainMenu("❌ Оценить заявку можно только после завершения.");
+        }
+
+        // Проверяем, что пользователь — оператор, который вёл заявку
+        boolean isAssigned = false;
+        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            for (String id : ids) {
+                if (id.trim().equals(String.valueOf(userId))) {
+                    isAssigned = true;
+                    break;
+                }
+            }
+        }
+        if (!isAssigned) {
+            return responseWithMainMenu("❌ Вы не вели эту заявку.");
+        }
+
+        // Проверяем, что автор — оператор
+        User author = getUserOrNull(elder.getCreatedBy());
+        if (author == null || !isOperator(author)) {
+            return responseWithMainMenu("❌ Заявка создана не оператором.");
+        }
+
+        // Проверяем, не оценил ли уже
+        if (ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent()) {
+            return responseWithMainMenu("⭐ Вы уже оценили эту заявку.");
+        }
+
+        // Сохраняем заявку в состоянии
+        stateService.setTempElder(userId, elder);
+        stateService.setState(userId, DialogState.AWAITING_RATING);
+
+        UniversalResponse response = new UniversalResponse(
+                "⭐ **Оцените заявку #" + elderId + "**\n\n" +
+                        "👤 **Автор:** " + author.getFirstName() + "\n" +
+                        "📊 **Рейтинг автора:** " + String.format("%.1f", author.getRating()) + " ⭐\n\n" +
+                        "Выберите оценку (1–5 звёзд):"
+        );
+        response.addButtonFullRow("⭐ 1 звезда", "rate_stars_1_" + elderId);
+        response.addButtonFullRow("⭐⭐ 2 звезды", "rate_stars_2_" + elderId);
+        response.addButtonFullRow("⭐⭐⭐ 3 звезды", "rate_stars_3_" + elderId);
+        response.addButtonFullRow("⭐⭐⭐⭐ 4 звезды", "rate_stars_4_" + elderId);
+        response.addButtonFullRow("⭐⭐⭐⭐⭐ 5 звёзд", "rate_stars_5_" + elderId);
+        response.addButtonFullRow("❌ Отменить", "cancel_action");
+        return response;
+    }
+    private UniversalResponse handleDeleteCompletedElder(Long userId, Long elderId) {
+        Elder elder = elderService.findById(elderId);
+        if (elder == null) {
+            return responseWithMainMenu("❌ Заявка не найдена.");
+        }
+
+        // Проверяем, что заявка завершена
+        if (elder.getStatus() != ElderStatus.COMPLETED) {
+            return responseWithMainMenu("❌ Удалить можно только завершённую заявку.");
+        }
+
+        // Проверяем, что пользователь — оператор, который вёл заявку
+        boolean isAssigned = false;
+        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            for (String id : ids) {
+                if (id.trim().equals(String.valueOf(userId))) {
+                    isAssigned = true;
+                    break;
+                }
+            }
+        }
+        if (!isAssigned) {
+            return responseWithMainMenu("❌ Вы не вели эту заявку.");
+        }
+
+        // ===== ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ =====
+        stateService.setTempElder(userId, elder);
+        stateService.setState(userId, DialogState.CONFIRM_DELETE_COMPLETED);
+
+        UniversalResponse response = new UniversalResponse(
+                "⚠️ **Вы уверены, что хотите удалить заявку #" + elderId + "?**\n\n" +
+                        "👤 **Подопечный:** " + elder.getFullName() + "\n" +
+                        "📌 **Статус:** Завершена\n\n" +
+                        "Это действие нельзя отменить!"
+        );
+        response.addButtonFullRow("✅ Да, удалить", "confirm_delete_completed_yes");
+        response.addButtonFullRow("❌ Отменить", "confirm_delete_completed_no");
         return response;
     }
 }

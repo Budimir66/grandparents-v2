@@ -109,12 +109,34 @@ public class OperatorService {
             }
         }
 
-        // ===== ОТВЕТ ОПЕРАТОРУ (ТОЛЬКО ОДИН РАЗ!) =====
-        UniversalResponse response = new UniversalResponse(
-                "✅ **Заявка #" + elderId + " взята в работу!**\n\n" +
-                        "💡 Контакты клиента теперь доступны.\n" +
-                        "📱 Свяжитесь с автором для уточнения деталей."
-        );
+        // ===== ОТВЕТ ОПЕРАТОРУ =====
+        User author = userService.findById(elder.getCreatedBy());
+        int bonusAfter = user.getBonusPoints();
+        int bonusSpent = 1; // списывается 1 балл
+
+        StringBuilder card = new StringBuilder();
+        card.append("✅ **Заявка #").append(elderId).append(" взята в работу!**\n\n");
+        card.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
+        card.append("💰 **Списано баллов:** -").append(bonusSpent).append("\n");
+        card.append("💰 **Осталось баллов:** ").append(bonusAfter).append("\n");
+        card.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
+        card.append("📍 **Локация:** ").append(elder.getPreferredLocation() != null ? elder.getPreferredLocation() : "не указана").append("\n");
+        card.append("💰 **Бюджет:** ").append(elder.getBudget()).append(" руб.\n");
+        card.append("🎂 **Возраст:** ").append(elder.getAge()).append(" лет\n");
+        card.append("💊 **Здоровье:** ").append(elder.getHealthCondition() != null ? elder.getHealthCondition() : "не указано").append("\n");
+        card.append("📝 **Пожелания:** ").append(elder.getRequirements() != null ? elder.getRequirements() : "не указаны").append("\n");
+        card.append("📌 **Статус:** В работе\n");
+        card.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
+        card.append("👤 **Подопечный:** ").append(elder.getFullName()).append("\n");
+        card.append("👤 **Клиент:** ").append(elder.getClientFirstName() != null ? elder.getClientFirstName() : "не указан").append("\n");
+        card.append("📱 **Телефон:** ").append(elder.getClientPhone() != null ? elder.getClientPhone() : "не указан").append("\n");
+        card.append("━━━━━━━━━━━━━━━━━━━━━━━");
+
+        UniversalResponse response = new UniversalResponse(card.toString());
+
+// ===== КНОПКИ: "Отправить запрос" и "Связаться" в одну строку =====
+        response.addButton("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
+        response.addButton("📱 Связаться через MAX", "contact_client_" + elderId);
         response.addButtonFullRow("📋 Мои заявки", "my_requests");
         response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");

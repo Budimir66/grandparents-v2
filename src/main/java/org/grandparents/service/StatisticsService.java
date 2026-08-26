@@ -92,7 +92,7 @@ public class StatisticsService {
                 "💡 Конверсия показывает, сколько взятых заявок вы завершили.";
 
         UniversalResponse response = new UniversalResponse(stats);
-        response.addButton("📋 Мои заявки", "my_requests");
+        response.addButton("📋 Заявки", "menu_requests");
         response.addButton("🏠 Главное меню", "main_menu");
         return response;
     }
