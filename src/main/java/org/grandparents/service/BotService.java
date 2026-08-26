@@ -2419,34 +2419,11 @@ public class BotService {
 
         // ===== КНОПКИ ДЛЯ ОПЕРАТОРА =====
         if (isOperator && !isAuthor) {
-            if (viewingFromInterested) {
-                response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
-            } else {
-                // ===== КНОПКИ ПОКАЗЫВАЕМ ВСЕГДА, ЕСЛИ ЗАЯВКА АКТИВНА =====
-                if (elder.getStatus() == ElderStatus.NEW ||
-                        elder.getStatus() == ElderStatus.OFFERED ||
-                        elder.getStatus() == ElderStatus.IN_PROGRESS) {
-
-                    response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
-                    response.addButtonFullRow("👍 Интересно", "interested_elder_" + elderId);
-                    response.addButtonFullRow("👎 Не подходит", "not_interested_elder_" + elderId);
-                }
-            }
-
-            // ===== КНОПКА "ПОЖАЛОВАТЬСЯ" =====
-            if (elder.getStatus() != ElderStatus.COMPLETED &&
-                    elder.getStatus() != ElderStatus.DELETED &&
-                    elder.getStatus() != ElderStatus.EXPIRED) {
-                response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
-            }
-
-            // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЕДЁТ ЗАЯВКУ (ПРАВИЛЬНАЯ ВЕРСИЯ) =====
+            // ===== ПРОВЕРЯЕМ, ВЗЯЛ ЛИ УЖЕ ОПЕРАТОР ЭТУ ЗАЯВКУ (ОБЪЯВЛЯЕМ ЗДЕСЬ!) =====
             boolean isAssignedToElder = false;
             if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
-                // Разбиваем строку с ID по запятой
                 String[] ids = elder.getAssignedOperatorIds().split(",");
                 for (String id : ids) {
-                    // Убираем пробелы и сравниваем с Telegram ID пользователя
                     if (id.trim().equals(String.valueOf(userId))) {
                         isAssignedToElder = true;
                         break;
@@ -2454,7 +2431,31 @@ public class BotService {
                 }
             }
 
-// Теперь показываем кнопку только если оператор ВЕДЁТ заявку
+            // ===== ЕСЛИ ОПЕРАТОР СМОТРИТ ИЗ "ИНТЕРЕСНЫХ" =====
+            if (viewingFromInterested) {
+                response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
+            } else {
+                // ===== ПОКАЗЫВАЕМ КНОПКИ ТОЛЬКО ЕСЛИ ЗАЯВКА НЕ ВЗЯТА ЭТИМ ОПЕРАТОРОМ =====
+                if (!isAssignedToElder) {
+                    if (elder.getStatus() == ElderStatus.NEW ||
+                            elder.getStatus() == ElderStatus.OFFERED ||
+                            elder.getStatus() == ElderStatus.IN_PROGRESS) {
+
+                        response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
+                        response.addButtonFullRow("👍 Интересно", "interested_elder_" + elderId);
+                        response.addButtonFullRow("👎 Не подходит", "not_interested_elder_" + elderId);
+                    }
+                }
+            }
+
+            // ===== КНОПКА "ПОЖАЛОВАТЬСЯ" (ВСЕГДА, ЕСЛИ ЗАЯВКА АКТИВНА) =====
+            if (elder.getStatus() != ElderStatus.COMPLETED &&
+                    elder.getStatus() != ElderStatus.DELETED &&
+                    elder.getStatus() != ElderStatus.EXPIRED) {
+                response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
+            }
+
+            // ===== КНОПКИ ДЛЯ ОПЕРАТОРА, КОТОРЫЙ УЖЕ ВЗЯЛ ЗАЯВКУ =====
             if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);

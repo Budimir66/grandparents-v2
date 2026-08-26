@@ -224,13 +224,11 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // ===== ДИАГНОСТИКА В ЛОГ (ВАЖНО!) =====
         log.info("🔍 [requestComplete] Заявка #{}, статус: {}, assigned_operator_ids: '{}'",
                 elderId, elder.getStatus(), elder.getAssignedOperatorIds());
 
         // ===== 1. ПРОВЕРЯЕМ СТАТУС =====
         if (elder.getStatus() != ElderStatus.IN_PROGRESS) {
-            log.warn("⚠️ [requestComplete] Статус заявки #{} не IN_PROGRESS, а {}", elderId, elder.getStatus());
             return responseWithMainMenu("❌ Заявка не в работе.");
         }
 
@@ -241,41 +239,52 @@ public class OperatorService {
             for (String id : ids) {
                 if (id.trim().equals(String.valueOf(userId))) {
                     isAssigned = true;
-                    log.info("✅ [requestComplete] Пользователь {} найден в assigned_operator_ids", userId);
                     break;
                 }
             }
         }
 
-        // Если не нашли в assigned_operator_ids, проверяем старую модель
         if (!isAssigned && elder.getAssignedOperatorId() != null) {
             isAssigned = elder.getAssignedOperatorId().equals(userId);
-            if (isAssigned) {
-                log.info("✅ [requestComplete] Пользователь {} найден в assigned_operator_id (старая модель)", userId);
-            }
         }
 
         if (!isAssigned) {
-            log.warn("⚠️ [requestComplete] Пользователь {} НЕ найден в assigned_operator_ids: '{}'", userId, elder.getAssignedOperatorIds());
             return responseWithMainMenu("❌ Эта заявка не находится у вас в работе.");
         }
 
-        // ===== 3. ПРОВЕРЯЕМ, ЧТО АВТОР НЕ РАВЕН ОПЕРАТОРУ =====
+        // ===== 3. ОПРЕДЕЛЯЕМ, КОМУ ОТПРАВЛЯТЬ ЗАПРОС =====
         Long authorId = elder.getCreatedBy();
-        if (authorId == null) {
-            return responseWithMainMenu("❌ У заявки нет автора.");
+        User author = null;
+        Long recipientId = null;
+        String recipientName = "Клиент";
+
+        if (authorId != null) {
+            author = userService.findById(authorId);
+            if (author != null) {
+                recipientId = author.getTelegramId();
+                recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
+            }
         }
 
-        if (authorId.equals(userId)) {
-            return responseWithMainMenu("❌ Вы не можете отправить запрос на закрытие своей заявки.");
+        // Если автор не найден, отправляем уведомление клиенту (по client_telegram_id)
+        if (recipientId == null) {
+            recipientId = elder.getClientTelegramId();
+            User client = getUserOrNull(recipientId);
+            if (client != null) {
+                recipientName = client.getFirstName() != null ? client.getFirstName() : "Клиент";
+            } else {
+                // Если и клиент не найден — отправляем администратору
+                List<User> admins = userService.findByAccessLevel(AccessLevel.ADMIN);
+                if (!admins.isEmpty()) {
+                    recipientId = admins.get(0).getTelegramId();
+                    recipientName = "Администратор";
+                } else {
+                    return responseWithMainMenu("❌ Не удалось определить получателя запроса на закрытие.");
+                }
+            }
         }
 
-        // ===== 4. ОТПРАВЛЯЕМ ЗАПРОС АВТОРУ =====
-        User author = userService.findById(authorId);
-        if (author == null) {
-            return responseWithMainMenu("❌ Автор не найден.");
-        }
-
+        // ===== 4. ФОРМИРУЕМ СООБЩЕНИЕ =====
         User operator = userService.findById(userId);
         String operatorName = operator != null ? operator.getFirstName() : "Оператор";
 
@@ -290,16 +299,28 @@ public class OperatorService {
         response.addButtonFullRow("✅ Да, подтверждаю", "confirm_complete_elder_" + elderId);
         response.addButtonFullRow("❌ Нет, ещё нет", "reject_complete_elder_" + elderId);
 
-        // Отправляем автору
-        Long chatId = author.getChatId() != null ? author.getChatId() : author.getTelegramId();
-        messageSender.sendMessage(chatId, response);
+        // ===== 5. ОТПРАВЛЯЕМ =====
+        Long chatId = null;
+        User recipient = getUserOrNull(recipientId);
+        if (recipient != null && recipient.getChatId() != null) {
+            chatId = recipient.getChatId();
+        } else {
+            chatId = recipientId;
+        }
 
-        // ===== 5. ОТВЕТ ОПЕРАТОРУ =====
-        return responseWithMainMenu("📨 Запрос на закрытие заявки #" + elderId + " отправлен " + author.getFirstName() + ".\n\n" +
+        if (chatId != null) {
+            messageSender.sendMessage(chatId, response);
+            log.info("📨 Запрос на закрытие отправлен {} (chatId={})", recipientName, chatId);
+        } else {
+            log.error("❌ Не удалось отправить запрос на закрытие: нет chatId для {}", recipientName);
+            return responseWithMainMenu("❌ Не удалось отправить запрос. Попробуйте позже.");
+        }
+
+        // ===== 6. ОТВЕТ ОПЕРАТОРУ =====
+        return responseWithMainMenu("📨 Запрос на закрытие заявки #" + elderId + " отправлен " + recipientName + ".\n\n" +
                 "⏳ Статус заявки: **Ожидает подтверждения**\n\n" +
                 "Вы получите уведомление, когда клиент подтвердит закрытие.");
     }
-
     // ============================================================
     // ===== ПОДТВЕРЖДЕНИЕ ЗАКРЫТИЯ =====
     // ============================================================
