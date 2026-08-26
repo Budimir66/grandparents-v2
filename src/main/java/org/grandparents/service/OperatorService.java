@@ -64,13 +64,14 @@ public class OperatorService {
             return responseWithMainMenu("❌ Эта заявка уже завершена или удалена.");
         }
 
-        // ===== ДОБАВЛЯЕМ ОПЕРАТОРА В СПИСОК (assigned_operator_ids) =====
+        // ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+        // ===== ГЛАВНОЕ: СОХРАНЯЕМ ОПЕРАТОРА В assigned_operator_ids =====
+        // ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
         String currentIds = elder.getAssignedOperatorIds();
         if (currentIds == null || currentIds.isEmpty()) {
             elder.setAssignedOperatorIds(String.valueOf(userId));
             log.info("📝 [takeElder] Заявка #{}: установлен первый оператор {}", elderId, userId);
         } else {
-            // Проверяем, не добавлен ли уже этот оператор
             List<String> ids = Arrays.asList(currentIds.split(","));
             if (!ids.contains(String.valueOf(userId))) {
                 elder.setAssignedOperatorIds(currentIds + "," + userId);
@@ -80,9 +81,7 @@ public class OperatorService {
             }
         }
 
-        // ===== НЕ МЕНЯЕМ СТАТУС ЗАЯВКИ! =====
-        // Статус должен оставаться IN_PROGRESS, если он уже был таким
-        // Если заявка была NEW, ставим IN_PROGRESS
+        // ===== МЕНЯЕМ СТАТУС НА IN_PROGRESS (ЕСЛИ ЕЩЁ НЕ В РАБОТЕ) =====
         if (elder.getStatus() == ElderStatus.NEW) {
             elder.setStatus(ElderStatus.IN_PROGRESS);
         }
@@ -115,34 +114,15 @@ public class OperatorService {
             }
         }
 
-
-        // ===== ФОРМИРУЕМ ПОЛНУЮ КАРТОЧКУ ЗАЯВКИ ДЛЯ ОПЕРАТОРА =====
-        StringBuilder card = new StringBuilder();
-        card.append("✅ **Заявка #").append(elder.getId()).append(" взята в работу!**\n\n");
-        card.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
-        card.append("📍 **Локация:** ").append(elder.getPreferredLocation() != null ? elder.getPreferredLocation() : "не указана").append("\n");
-        card.append("💰 **Бюджет:** ").append(elder.getBudget()).append(" руб.\n");
-        card.append("🎂 **Возраст:** ").append(elder.getAge()).append(" лет\n");
-        card.append("💊 **Здоровье:** ").append(elder.getHealthCondition() != null ? elder.getHealthCondition() : "не указано").append("\n");
-        card.append("📝 **Пожелания:** ").append(elder.getRequirements() != null ? elder.getRequirements() : "не указаны").append("\n");
-        card.append("📌 **Статус:** В работе\n");
-        card.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
-        card.append("👤 **Подопечный:** ").append(elder.getFullName()).append("\n");
-        card.append("👤 **Клиент:** ").append(elder.getClientFirstName() != null ? elder.getClientFirstName() : "не указан").append("\n");
-        card.append("📱 **Телефон:** ").append(elder.getClientPhone() != null ? elder.getClientPhone() : "не указан").append("\n");
-        card.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
-        card.append("💡 Контакты клиента теперь доступны.\n");
-        card.append("📱 Свяжитесь с автором для уточнения деталей.");
-
-        UniversalResponse response = new UniversalResponse(card.toString());
-
-        // ===== КНОПКИ ДЛЯ ОПЕРАТОРА =====
-        response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
-        response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
+        // ===== ОТВЕТ ОПЕРАТОРУ =====
+        UniversalResponse response = new UniversalResponse(
+                "✅ **Заявка #" + elderId + " взята в работу!**\n\n" +
+                        "💡 Контакты клиента теперь доступны.\n" +
+                        "📱 Свяжитесь с автором для уточнения деталей."
+        );
         response.addButtonFullRow("📋 Мои заявки", "my_requests");
         response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
-
         return response;
     }
 
