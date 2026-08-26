@@ -1297,6 +1297,7 @@ public class BotService {
                  AWAITING_OPERATOR_PROFILE_EMAIL -> {
                 return handleOperatorProfile(userId, text, state);
             }
+
             case AWAITING_COMPLAINT_REASON -> {
                 Elder elder = stateService.getTempElder(userId);
                 if (elder == null) {
@@ -1310,7 +1311,7 @@ public class BotService {
                     return responseWithMainMenu("❌ Пользователь не найден.");
                 }
 
-                // ===== ОПРЕДЕЛЯЕМ АВТОРА (ВНУТРЕННИЙ ID) =====
+                // ===== ОПРЕДЕЛЯЕМ АВТОРА =====
                 Long targetId = elder.getCreatedBy();
                 String targetName = "Неизвестный (автор не найден)";
 
@@ -1323,7 +1324,7 @@ public class BotService {
 
                 // ===== СОХРАНЯЕМ ЖАЛОБУ =====
                 Complaint complaint = new Complaint();
-                complaint.setComplainantId(complainant.getId());  // ← ВНУТРЕННИЙ ID!
+                complaint.setComplainantId(complainant.getId());
                 complaint.setTargetId(targetId != null ? targetId : 0L);
                 complaint.setElderId(elder.getId());
                 complaint.setReason(text != null ? text : "Без причины");
@@ -1336,7 +1337,7 @@ public class BotService {
 
                 stateService.clearState(userId);
 
-                // ===== ОТВЕТ ПОЛЬЗОВАТЕЛЮ =====
+                // ===== ОТВЕТ ПОЛЬЗОВАТЕЛЮ (ВОЗВРАЩАЕМ!) =====
                 String responseText = "✅ **Жалоба отправлена администратору.**\n\n" +
                         "📋 **Номер жалобы:** #" + complaint.getId() + "\n" +
                         "📋 **Заявка #" + elder.getId() + "**\n" +
@@ -1348,7 +1349,7 @@ public class BotService {
                 response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
                 response.addButtonFullRow("📋 Мои заявки", "my_requests");
                 response.addButtonFullRow("🏠 Главное меню", "main_menu");
-                return response;
+                return response;  // ← ВАЖНО: возвращаем ответ!
             }
             case EDITING_PROFILE_NAME -> {
                 user = getUserOrNull(userId);
@@ -4157,5 +4158,10 @@ public class BotService {
         response.addButtonFullRow("📋 Мои заявки", "my_requests");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
+    }
+    private String getUserName(Long userId) {
+        if (userId == null) return "Неизвестный";
+        User user = userService.findById(userId);
+        return user != null ? user.getFirstName() : "Неизвестный";
     }
 }

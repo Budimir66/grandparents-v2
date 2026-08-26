@@ -42,31 +42,9 @@ public class OperatorService {
     // ============================================================
 
     public UniversalResponse takeElder(Long userId, Long elderId) {
-
         User user = userService.findByTelegramId(userId).orElse(null);
         if (user == null) {
             return responseWithMainMenu("❌ Пользователь не найден.");
-        }
-
-        // ===== ПРОВЕРКА ПРОФИЛЯ ДЛЯ МЕНЕДЖЕРА =====
-        if (user.getAccessLevel() == AccessLevel.MANAGER) {
-            if (user.getPhone() == null || user.getPhone().isEmpty() ||
-                    user.getFirstName() == null || user.getFirstName().isEmpty()) {
-
-                UniversalResponse response = new UniversalResponse(
-                        "⚠️ **Для работы с заявками необходимо заполнить профиль!**\n\n" +
-                                "Пожалуйста, укажите:\n" +
-                                "📱 **Телефон** (обязательно)\n" +
-                                "👤 **Имя** (обязательно)\n" +
-                                "✈️ Telegram (опционально)\n" +
-                                "📧 Email (опционально)\n\n" +
-                                "Перейдите в 'Мой профиль' и заполните данные."
-                );
-                response.addButtonFullRow("👤 Заполнить профиль", "my_profile");
-                response.addButtonFullRow("🔙 Назад к заявке", "view_elder_" + elderId);
-                response.addButtonFullRow("🏠 Главное меню", "main_menu");
-                return response;
-            }
         }
 
         Elder elder = elderService.findById(elderId);
@@ -74,57 +52,77 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // ===== ЗАЯВКУ НЕЛЬЗЯ ВЗЯТЬ ТОЛЬКО ЕСЛИ ОНА ЗАВЕРШЕНА =====
-        if (elder.getStatus() == ElderStatus.COMPLETED) {
-            return responseWithMainMenu("✅ Эта заявка уже завершена.");
+        // ===== ПРОВЕРКА: ЗАЯВКА УЖЕ В РАБОТЕ =====
+        if (elder.getAssignedOperatorId() != null) {
+            String operatorName = "Неизвестный";
+            User operator = userService.findById(elder.getAssignedOperatorId());
+            if (operator != null) {
+                operatorName = operator.getFirstName();
+            }
+            return responseWithMainMenu("❌ Эта заявка уже взята в работу оператором " + operatorName);
         }
 
-        User operator = getUserOrNull(userId);
-        if (!isOperator(operator)) {
-            return responseWithMainMenu("❌ Только операторы могут брать заявки в работу.");
-        }
-
+        // ===== ПРОВЕРКА: АВТОР НЕ МОЖЕТ ВЗЯТЬ СВОЮ ЗАЯВКУ =====
         if (elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId)) {
-            return responseWithMainMenu("❌ Вы не можете взять в работу свою заявку.");
+            return responseWithMainMenu("❌ Вы не можете взять свою заявку.");
         }
 
-        // ===== БЕРЁМ ЗАЯВКУ В РАБОТУ (ДАЖЕ ЕСЛИ ОНА УЖЕ В РАБОТЕ) =====
+        // ===== БЕРЁМ ЗАЯВКУ В РАБОТУ =====
         elder.setAssignedOperatorId(userId);
-        elder.setTakenAt(LocalDateTime.now());
         elder.setStatus(ElderStatus.IN_PROGRESS);
+        elder.setTakenAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
-        // ===== НАЧИСЛЯЕМ БАЛЛЫ =====
-        int takeBonus = bonusSettingService.getBonusValue("take_elder");
-        if (takeBonus == 0) takeBonus = 1;
+        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ =====
+        if (elder.getBonusPointsAwarded() == null || !elder.getBonusPointsAwarded()) {
+            User author = userService.findById(elder.getCreatedBy());
+            if (author != null) {
+                author.addBonusPoints(-1);
+                userService.saveUser(author);
+                log.info("📊 У автора {} списано 1 балл за заявку #{}", author.getId(), elderId);
+                elder.setBonusPointsAwarded(true);
+                elderService.updateElder(elder);
+            }
+        }
 
-        operator.setBonusPoints(operator.getBonusPoints() + takeBonus);
-        operator.incrementTotalTaken();
-        userService.saveUser(operator);
+        // ===== УВЕДОМЛЯЕМ АВТОРА =====
+        if (elder.getCreatedBy() != null) {
+            User author = userService.findById(elder.getCreatedBy());
+            if (author != null) {
+                String operatorName = user.getFirstName() != null ? user.getFirstName() : "Оператор";
+                // Используем userService для получения chatId
+                try {
+                    User authorUser = userService.findByTelegramId(author.getTelegramId()).orElse(null);
+                    if (authorUser != null) {
+                        Long chatId = authorUser.getChatId() != null ? authorUser.getChatId() : authorUser.getTelegramId();
+                        UniversalResponse notification = new UniversalResponse(
+                                "📢 **Вашу заявку #" + elderId + " взяли в работу!**\n\n" +
+                                        "👤 **Оператор:** " + operatorName + "\n" +
+                                        "📌 **Статус:** В работе\n\n" +
+                                        "Оператор свяжется с вами в ближайшее время."
+                        );
+                        notification.addButtonFullRow("👤 Моя заявка", "my_request");
+                        notification.addButtonFullRow("🏠 Главное меню", "main_menu");
+                        messageSender.sendMessage(chatId, notification);
+                        log.info("📨 Уведомление отправлено автору {}", author.getTelegramId());
+                    }
+                } catch (Exception e) {
+                    log.error("❌ Ошибка отправки уведомления автору: {}", e.getMessage());
+                }
+            }
+        }
 
-        log.info("💰 Оператор {} взял заявку #{}, начислено {} баллов",
-                operator.getTelegramId(), elderId, takeBonus);
-
-        // ===== ОТВЕТ С КОНТАКТАМИ =====
-        String contactInfo = "✅ **Вы взяли заявку #" + elderId + " в работу!**\n\n" +
-                "📋 **Полная информация:**\n" +
-                "━━━━━━━━━━━━━━━━━━━━━━━\n" +
-                "👤 **Имя подопечного:** " + elder.getFullName() + "\n" +
-                "📍 **Локация:** " + elder.getPreferredLocation() + "\n" +
-                "🎂 **Возраст:** " + elder.getAge() + " лет\n" +
-                "💊 **Здоровье:** " + elder.getHealthCondition() + "\n" +
-                "💰 **Бюджет:** " + elder.getBudget() + " руб.\n" +
-                "📝 **Пожелания:** " + elder.getRequirements() + "\n" +
-                "━━━━━━━━━━━━━━━━━━━━━━━\n" +
-                "📱 **Контакты клиента:**\n" +
-                "👤 **Имя:** " + elder.getClientFirstName() + "\n" +
-                "📞 **Телефон:** " + elder.getClientPhone() + "\n" +
-                "━━━━━━━━━━━━━━━━━━━━━━━\n" +
-                "💰 **Ваш баланс:** " + operator.getBonusPoints() + " баллов (+" + takeBonus + " за взятие)";
-
-        UniversalResponse response = new UniversalResponse(contactInfo);
-        response.addButton("📋 Мои заявки", "my_requests");
-        response.addButton("🏠 Главное меню", "main_menu");
+        // ===== ОТВЕТ ОПЕРАТОРУ =====
+        UniversalResponse response = new UniversalResponse(
+                "✅ **Заявка #" + elderId + " взята в работу!**\n\n" +
+                        "👤 **Автор:** " + getUserName(elder.getCreatedBy()) + "\n" +
+                        "📌 **Статус:** В работе\n\n" +
+                        "💡 Контакты клиента теперь доступны.\n" +
+                        "📱 Свяжитесь с автором для уточнения деталей."
+        );
+        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+        response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
     }
 
@@ -566,5 +564,10 @@ public class OperatorService {
         }
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
+    }
+    private String getUserName(Long userId) {
+        if (userId == null) return "Неизвестный";
+        User user = userService.findById(userId);
+        return user != null ? user.getFirstName() : "Неизвестный";
     }
 }

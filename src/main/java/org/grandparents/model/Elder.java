@@ -108,6 +108,9 @@ public class Elder {
     @Column(name = "consent_given_at")
     private LocalDateTime consentGivenAt;
 
+    @Column(name = "bonus_points_awarded")
+    private Boolean bonusPointsAwarded = false;
+
     // ===== КОНСТРУКТОРЫ =====
     public Elder() {
     }
@@ -130,6 +133,9 @@ public class Elder {
     }
 
     // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
+
+    public Boolean getBonusPointsAwarded() { return bonusPointsAwarded; }
+    public void setBonusPointsAwarded(Boolean bonusPointsAwarded) { this.bonusPointsAwarded = bonusPointsAwarded; }
 
     public Boolean getConsentGiven() { return consentGiven; }
     public void setConsentGiven(Boolean consentGiven) { this.consentGiven = consentGiven; }
