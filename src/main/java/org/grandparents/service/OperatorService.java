@@ -407,7 +407,8 @@ public class OperatorService {
         if (requestingOperatorId != null) {
             log.info("🔍 [confirmComplete] Пытаемся отправить уведомление оператору {}", requestingOperatorId);
             if (!requestingOperatorId.equals(userId)) {
-                User operator = userService.findById(requestingOperatorId);
+                User operator = getUserOrNull(requestingOperatorId);
+              //  User operator = userService.findById(requestingOperatorId);
                 if (operator != null) {
                     log.info("🔍 [confirmComplete] Оператор найден: {}, chatId={}", operator.getFirstName(), operator.getChatId());
 
