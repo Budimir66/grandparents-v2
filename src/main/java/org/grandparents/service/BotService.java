@@ -4301,8 +4301,7 @@ public class BotService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // ===== УБИРАЕМ ПРОВЕРКУ НА COMPLETED! =====
-        // Проверяем только, что заявка не удалена и не истекла
+        // Проверяем, что заявка не удалена и не истекла
         if (elder.getStatus() == ElderStatus.DELETED || elder.getStatus() == ElderStatus.EXPIRED) {
             return responseWithMainMenu("❌ Заявка удалена или истекла.");
         }
@@ -4322,20 +4321,26 @@ public class BotService {
             return responseWithMainMenu("❌ Вы не ведёте эту заявку.");
         }
 
-        // Проверяем, что автор существует
-        User author = userService.findById(elder.getCreatedBy());
+        // ===== ИСПРАВЛЕНО: используем getUserOrNull или findByTelegramId =====
+        User author = getUserOrNull(elder.getCreatedBy());
         if (author == null) {
+            log.warn("⚠️ Автор заявки #{} с Telegram ID {} не найден", elderId, elder.getCreatedBy());
             return responseWithMainMenu("❌ Автор заявки не найден.");
         }
 
-        // Проверяем, не оценил ли уже оператор эту заявку
+        // Проверяем, что автор — оператор
+        if (!isOperator(author)) {
+            return responseWithMainMenu("❌ Заявка создана не оператором.");
+        }
+
+        // Проверяем, не оценил ли уже
         if (ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent()) {
             return responseWithMainMenu("⭐ Вы уже оценили эту заявку.");
         }
 
         // Сохраняем оценку через RatingService
         try {
-            ratingService.addRating(userId, elder.getCreatedBy(), elderId, stars);
+            ratingService.addRating(userId, author.getId(), elderId, stars);
         } catch (IllegalStateException e) {
             return responseWithMainMenu("❌ " + e.getMessage());
         }
