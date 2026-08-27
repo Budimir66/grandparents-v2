@@ -2467,7 +2467,6 @@ public class BotService {
 
         // ===== КНОПКИ ДЛЯ ОПЕРАТОРА =====
         if (isOperator && !isAuthor) {
-            // ===== ОБЪЯВЛЯЕМ ПЕРЕМЕННУЮ ЗДЕСЬ (ОДИН РАЗ) =====
             boolean isAssignedToElder = false;
             if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
                 String[] ids = elder.getAssignedOperatorIds().split(",");
@@ -2479,11 +2478,9 @@ public class BotService {
                 }
             }
 
-            // ===== ЕСЛИ ОПЕРАТОР СМОТРИТ ИЗ "ИНТЕРЕСНЫХ" =====
             if (viewingFromInterested) {
                 response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
             } else {
-                // ===== ПОКАЗЫВАЕМ КНОПКИ ТОЛЬКО ЕСЛИ ЗАЯВКА НЕ ВЗЯТА ЭТИМ ОПЕРАТОРОМ =====
                 if (!isAssignedToElder) {
                     if (elder.getStatus() == ElderStatus.NEW ||
                             elder.getStatus() == ElderStatus.OFFERED ||
@@ -2500,12 +2497,11 @@ public class BotService {
             if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
-            }
-                // ===== ЕСЛИ ЗАЯВКА СОЗДАНА ОПЕРАТОРОМ — ДОБАВЛЯЕМ "ОЦЕНИТЬ ЗАЯВКУ" =====
+
+                // ===== "ОЦЕНИТЬ ЗАЯВКУ" — ТОЛЬКО ДЛЯ ТЕХ, КТО ВЕДЁТ ЗАЯВКУ =====
                 if (elder.getCreatedBy() != null) {
                     User author = getUserOrNull(elder.getCreatedBy());
                     if (author != null && isOperator(author)) {
-                        // Проверяем, не оценил ли уже
                         boolean alreadyRated = ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent();
                         if (!alreadyRated) {
                             response.addButtonFullRow("⭐ Оценить заявку", "rate_elder_" + elderId);
@@ -2513,6 +2509,7 @@ public class BotService {
                     }
                 }
             }
+        }
 
 
         // ===== ЕСЛИ ОПЕРАТОР ЗАВЕРШИЛ ЗАЯВКУ — ПОКАЗАТЬ КНОПКУ ДЛЯ ОЦЕНКИ =====
