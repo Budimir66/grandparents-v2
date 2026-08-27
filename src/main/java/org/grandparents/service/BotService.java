@@ -4553,12 +4553,13 @@ public class BotService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // Проверяем, что заявка завершена
-        if (elder.getStatus() != ElderStatus.COMPLETED) {
-            return responseWithMainMenu("❌ Оценить заявку можно только после завершения.");
+        // ===== УБИРАЕМ ПРОВЕРКУ НА COMPLETED! =====
+        // Оценивать можно в любой момент, пока заявка активна
+        if (elder.getStatus() == ElderStatus.DELETED || elder.getStatus() == ElderStatus.EXPIRED) {
+            return responseWithMainMenu("❌ Заявка удалена или истекла.");
         }
 
-        // Проверяем, что пользователь — оператор, который вёл заявку
+        // Проверяем, что пользователь — оператор, который ведёт заявку
         boolean isAssigned = false;
         if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
             String[] ids = elder.getAssignedOperatorIds().split(",");
@@ -4570,7 +4571,7 @@ public class BotService {
             }
         }
         if (!isAssigned) {
-            return responseWithMainMenu("❌ Вы не вели эту заявку.");
+            return responseWithMainMenu("❌ Вы не ведёте эту заявку.");
         }
 
         // Проверяем, что автор — оператор
@@ -4588,10 +4589,20 @@ public class BotService {
         stateService.setTempElder(userId, elder);
         stateService.setState(userId, DialogState.AWAITING_RATING);
 
+        // ===== ПОКАЗЫВАЕМ ТЕКУЩИЙ СТАТУС =====
+        String statusText = switch (elder.getStatus()) {
+            case NEW -> "🟢 Новая";
+            case OFFERED -> "🟡 Предложена";
+            case IN_PROGRESS -> "🟠 В работе";
+            case COMPLETED -> "✅ Завершена";
+            default -> elder.getStatus().toString();
+        };
+
         UniversalResponse response = new UniversalResponse(
                 "⭐ **Оцените заявку #" + elderId + "**\n\n" +
                         "👤 **Автор:** " + author.getFirstName() + "\n" +
-                        "📊 **Рейтинг автора:** " + String.format("%.1f", author.getRating()) + " ⭐\n\n" +
+                        "📊 **Рейтинг автора:** " + String.format("%.1f", author.getRating()) + " ⭐\n" +
+                        "📌 **Статус заявки:** " + statusText + "\n\n" +
                         "Выберите оценку (1–5 звёзд):"
         );
         response.addButtonFullRow("⭐ 1 звезда", "rate_stars_1_" + elderId);
