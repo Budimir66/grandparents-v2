@@ -4321,7 +4321,12 @@ public class BotService {
             return responseWithMainMenu("❌ Вы не ведёте эту заявку.");
         }
 
-        // ===== ИСПРАВЛЕНО: используем getUserOrNull или findByTelegramId =====
+        // ===== ПОЛУЧАЕМ ВНУТРЕННИЕ ID =====
+        User rater = getUserOrNull(userId);
+        if (rater == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
+
         User author = getUserOrNull(elder.getCreatedBy());
         if (author == null) {
             log.warn("⚠️ Автор заявки #{} с Telegram ID {} не найден", elderId, elder.getCreatedBy());
@@ -4334,13 +4339,13 @@ public class BotService {
         }
 
         // Проверяем, не оценил ли уже
-        if (ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent()) {
+        if (ratingRepository.findByRaterIdAndElderId(rater.getId(), elderId).isPresent()) {
             return responseWithMainMenu("⭐ Вы уже оценили эту заявку.");
         }
 
-        // Сохраняем оценку через RatingService
+        // ===== СОХРАНЯЕМ ОЦЕНКУ (ПЕРЕДАЁМ ВНУТРЕННИЕ ID!) =====
         try {
-            ratingService.addRating(userId, author.getId(), elderId, stars);
+            ratingService.addRating(rater.getId(), author.getId(), elderId, stars);
         } catch (IllegalStateException e) {
             return responseWithMainMenu("❌ " + e.getMessage());
         }
