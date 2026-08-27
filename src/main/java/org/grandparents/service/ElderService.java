@@ -29,11 +29,19 @@ public class ElderService {
     // ===== БАЗОВЫЕ CRUD =====
 
     public Elder createElder(Elder elder) {
+        // ===== УСТАНАВЛИВАЕМ ДАТУ СОЗДАНИЯ =====
+        if (elder.getCreatedAt() == null) {
+            elder.setCreatedAt(LocalDateTime.now());
+        }
+
+        // ===== УСТАНАВЛИВАЕМ ДАТУ ОБНОВЛЕНИЯ =====
+        elder.setUpdatedAt(LocalDateTime.now());
+
         // ===== НЕ МЕНЯЕМ СТАТУС =====
-        // Просто сохраняем как есть
         if (elder.getStatus() == null) {
             elder.setStatus(ElderStatus.NEW);
         }
+
         return elderRepository.save(elder);
     }
 
@@ -57,7 +65,6 @@ public class ElderService {
     }
 
     public List<Elder> findActiveElders() {
-
         return elderRepository.findByStatusNotIn(List.of(
                 ElderStatus.COMPLETED,
                 ElderStatus.EXPIRED,
@@ -201,5 +208,4 @@ public class ElderService {
                 List.of(ElderStatus.COMPLETED, ElderStatus.DELETED, ElderStatus.EXPIRED)
         );
     }
-
 }
