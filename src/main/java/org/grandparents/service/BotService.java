@@ -2489,21 +2489,17 @@ public class BotService {
                             elder.getStatus() == ElderStatus.IN_PROGRESS) {
 
                         response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
-                        // "Интересно" и "Не подходит" в одной строке
                         response.addButton("👍 Интересно", "interested_elder_" + elderId);
                         response.addButton("👎 Не подходит", "not_interested_elder_" + elderId);
                     }
                 }
             }
 
-            // ===== УБИРАЕМ "Пожаловаться" =====
-            // response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
-
             // ===== КНОПКИ ДЛЯ ОПЕРАТОРА, КОТОРЫЙ УЖЕ ВЗЯЛ ЗАЯВКУ =====
             if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
-
+            }
                 // ===== ЕСЛИ ЗАЯВКА СОЗДАНА ОПЕРАТОРОМ — ДОБАВЛЯЕМ "ОЦЕНИТЬ ЗАЯВКУ" =====
                 if (elder.getCreatedBy() != null) {
                     User author = getUserOrNull(elder.getCreatedBy());
@@ -2516,7 +2512,7 @@ public class BotService {
                     }
                 }
             }
-        }
+
 
         // ===== ЕСЛИ ОПЕРАТОР ЗАВЕРШИЛ ЗАЯВКУ — ПОКАЗАТЬ КНОПКУ ДЛЯ ОЦЕНКИ =====
         if (isOperator && isAssigned && elder.getStatus() == ElderStatus.COMPLETED) {
