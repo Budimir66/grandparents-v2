@@ -4301,18 +4301,29 @@ public class BotService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // Проверяем, что заявка завершена
-        if (elder.getStatus() != ElderStatus.COMPLETED) {
-            return responseWithMainMenu("❌ Оценить автора можно только после завершения заявки.");
+        // ===== УБИРАЕМ ПРОВЕРКУ НА COMPLETED! =====
+        // Проверяем только, что заявка не удалена и не истекла
+        if (elder.getStatus() == ElderStatus.DELETED || elder.getStatus() == ElderStatus.EXPIRED) {
+            return responseWithMainMenu("❌ Заявка удалена или истекла.");
         }
 
-        // Проверяем, что пользователь — оператор, который вёл заявку
-        if (elder.getAssignedOperatorId() == null || !elder.getAssignedOperatorId().equals(userId)) {
-            return responseWithMainMenu("❌ Вы не вели эту заявку.");
+        // Проверяем, что пользователь — оператор, который ведёт заявку
+        boolean isAssigned = false;
+        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            for (String id : ids) {
+                if (id.trim().equals(String.valueOf(userId))) {
+                    isAssigned = true;
+                    break;
+                }
+            }
+        }
+        if (!isAssigned) {
+            return responseWithMainMenu("❌ Вы не ведёте эту заявку.");
         }
 
         // Проверяем, что автор существует
-        User author = getUserOrNull(elder.getCreatedBy());
+        User author = userService.findById(elder.getCreatedBy());
         if (author == null) {
             return responseWithMainMenu("❌ Автор заявки не найден.");
         }
