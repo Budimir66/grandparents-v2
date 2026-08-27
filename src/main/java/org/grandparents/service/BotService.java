@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -2949,9 +2950,13 @@ public class BotService {
 
                     // Фильтр по дате
                     if (filterTodayOnly) {
-                        LocalDateTime today = LocalDateTime.now();
-                        LocalDateTime startOfDay = today.withHour(0).withMinute(0).withSecond(0).withNano(0);
-                        if (elder.getCreatedAt() == null || elder.getCreatedAt().isBefore(startOfDay)) {
+                        LocalDate today = LocalDate.now();
+                        if (elder.getCreatedAt() == null) {
+                            return false;
+                        }
+                        // Сравниваем только дату (без времени)
+                        LocalDate elderDate = elder.getCreatedAt().toLocalDate();
+                        if (!elderDate.equals(today)) {
                             return false;
                         }
                     }
