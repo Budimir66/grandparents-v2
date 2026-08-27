@@ -2949,12 +2949,12 @@ public class BotService {
                     boolean filterTodayOnly = stateService.isFilterTodayOnly(userId);
 
                     // Фильтр по дате
+                    // Фильтр по дате
                     if (filterTodayOnly) {
-                        LocalDate today = LocalDate.now();
                         if (elder.getCreatedAt() == null) {
                             return false;
                         }
-                        // Сравниваем только дату (без времени)
+                        LocalDate today = LocalDate.now();
                         LocalDate elderDate = elder.getCreatedAt().toLocalDate();
                         if (!elderDate.equals(today)) {
                             return false;
