@@ -488,7 +488,26 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        if (elder.getAssignedOperatorId() == null || !elder.getAssignedOperatorId().equals(userId)) {
+        // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЗЯЛ ЭТУ ЗАЯВКУ =====
+        boolean isAssigned = false;
+
+        // Проверяем assignedOperatorId
+        if (elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId)) {
+            isAssigned = true;
+        }
+
+        // Если не нашли, проверяем assignedOperatorIds (строка с ID через запятую)
+        if (!isAssigned && elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            for (String id : ids) {
+                if (id.trim().equals(String.valueOf(userId))) {
+                    isAssigned = true;
+                    break;
+                }
+            }
+        }
+
+        if (!isAssigned) {
             return responseWithMainMenu("❌ Вы не можете связаться с клиентом по этой заявке.");
         }
 
@@ -516,7 +535,6 @@ public class OperatorService {
         String operatorName = operator.getFirstName() != null ? operator.getFirstName() : "Оператор";
         String operatorPhone = operator.getPhone() != null ? operator.getPhone() : "не указан";
 
-        // ===== ЛОГИРУЕМ ДЛЯ ОТЛАДКИ =====
         log.info("📞 Оператор {}: careHomeId={}, phone={}", operatorName, operator.getCareHomeId(), operator.getPhone());
 
         String clientMessage = "📱 **Вам сообщение от пансионата!**\n\n" +
