@@ -2416,7 +2416,6 @@ public class BotService {
         boolean isOperator = isOperator(user);
         boolean isAdmin = isAdmin(user);
         boolean isAuthor = elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId);
-        boolean isAssigned = elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId);
 
         // ===== ПРОВЕРЯЕМ, ОТКРЫЛ ЛИ ОПЕРАТОР ЗАЯВКУ ИЗ "ИНТЕРЕСНЫХ" =====
         boolean viewingFromInterested = stateService.isViewingFromInterested(userId);
@@ -2433,7 +2432,17 @@ public class BotService {
                 "━━━━━━━━━━━━━━━━━━━━━━━\n";
 
         // ===== ПОКАЗЫВАЕМ ИМЯ И КОНТАКТЫ =====
-        boolean canSeeContacts = isAssigned || isAuthor || isAdmin;
+        boolean canSeeContacts = isAuthor || isAdmin;
+        if (!canSeeContacts && elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            for (String id : ids) {
+                if (id.trim().equals(String.valueOf(userId))) {
+                    canSeeContacts = true;
+                    break;
+                }
+            }
+        }
+
         if (canSeeContacts) {
             card += "👤 **Имя:** " + elder.getFullName() + "\n" +
                     "👤 **Клиент:** " + elder.getClientFirstName() + "\n" +
@@ -2447,10 +2456,23 @@ public class BotService {
         // ===== СОЗДАЁМ ОТВЕТ =====
         UniversalResponse response = new UniversalResponse(card);
 
-        // ===== КНОПКИ ДЛЯ ЗАВЕРШЁННЫХ ЗАЯВОК =====
-        if (elder.getStatus() == ElderStatus.COMPLETED && isOperator) {
-            // Проверяем, что оператор вёл эту заявку
-            isAssigned = false;
+        // ===== КНОПКИ В ЗАВИСИМОСТИ ОТ РАЗДЕЛА =====
+        if (viewingFromInterested) {
+            // Раздел "Интересные"
+            response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
+        } else if (isOperator && !isAuthor) {
+            // Раздел "Поиск заявок" — кнопки для взятия в работу
+            if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
+                response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
+                response.addButton("👍 Интересно", "interested_elder_" + elderId);
+                response.addButton("👎 Не подходит", "not_interested_elder_" + elderId);
+            }
+        }
+
+        // ===== ЕСЛИ ЗАЯВКА УЖЕ В РАБОТЕ — ПОКАЗЫВАЕМ КНОПКИ ДЛЯ ОПЕРАТОРА =====
+        if (elder.getStatus() == ElderStatus.IN_PROGRESS) {
+            // Проверяем, что текущий пользователь — тот, кто взял заявку
+            boolean isAssigned = false;
             if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
                 String[] ids = elder.getAssignedOperatorIds().split(",");
                 for (String id : ids) {
@@ -2460,45 +2482,13 @@ public class BotService {
                     }
                 }
             }
+
             if (isAssigned) {
-                response.addButtonFullRow("🗑️ Удалить заявку", "delete_completed_elder_" + elderId);
-            }
-        }
-
-        // ===== КНОПКИ ДЛЯ ОПЕРАТОРА =====
-        if (isOperator && !isAuthor) {
-            boolean isAssignedToElder = false;
-            if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
-                String[] ids = elder.getAssignedOperatorIds().split(",");
-                for (String id : ids) {
-                    if (id.trim().equals(String.valueOf(userId))) {
-                        isAssignedToElder = true;
-                        break;
-                    }
-                }
-            }
-
-            if (viewingFromInterested) {
-                response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
-            } else {
-                if (!isAssignedToElder) {
-                    if (elder.getStatus() == ElderStatus.NEW ||
-                            elder.getStatus() == ElderStatus.OFFERED ||
-                            elder.getStatus() == ElderStatus.IN_PROGRESS) {
-
-                        response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
-                        response.addButton("👍 Интересно", "interested_elder_" + elderId);
-                        response.addButton("👎 Не подходит", "not_interested_elder_" + elderId);
-                    }
-                }
-            }
-
-            // ===== КНОПКИ ДЛЯ ОПЕРАТОРА, КОТОРЫЙ УЖЕ ВЗЯЛ ЗАЯВКУ =====
-            if (isAssignedToElder && elder.getStatus() == ElderStatus.IN_PROGRESS) {
+                // Кнопки для заявки, которая уже в работе у этого оператора
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
                 response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
 
-                // ===== "ОЦЕНИТЬ ЗАЯВКУ" — ТОЛЬКО ДЛЯ ТЕХ, КТО ВЕДЁТ ЗАЯВКУ =====
+                // Оценка заявки
                 if (elder.getCreatedBy() != null) {
                     User author = getUserOrNull(elder.getCreatedBy());
                     if (author != null && isOperator(author)) {
@@ -2508,15 +2498,6 @@ public class BotService {
                         }
                     }
                 }
-            }
-        }
-
-
-        // ===== ЕСЛИ ОПЕРАТОР ЗАВЕРШИЛ ЗАЯВКУ — ПОКАЗАТЬ КНОПКУ ДЛЯ ОЦЕНКИ =====
-        if (isOperator && isAssigned && elder.getStatus() == ElderStatus.COMPLETED) {
-            boolean alreadyRated = ratingRepository.findByRaterIdAndElderId(userId, elderId).isPresent();
-            if (!alreadyRated) {
-                response.addButtonFullRow("⭐ Оценить автора", "rate_author_" + elderId);
             }
         }
 
