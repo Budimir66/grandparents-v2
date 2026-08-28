@@ -2616,7 +2616,22 @@ public class BotService {
                 response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
             }
         }
-
+        // ===== КНОПКИ ДЛЯ ЗАВЕРШЁННЫХ ЗАЯВОК (ДЛЯ ОПЕРАТОРА) =====
+        if (elder.getStatus() == ElderStatus.COMPLETED && isOperator) {
+            boolean isAssigned = false;
+            if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+                String[] ids = elder.getAssignedOperatorIds().split(",");
+                for (String id : ids) {
+                    if (id.trim().equals(String.valueOf(userId))) {
+                        isAssigned = true;
+                        break;
+                    }
+                }
+            }
+            if (isAssigned) {
+                response.addButtonFullRow("🗑️ Удалить заявку", "delete_completed_elder_" + elderId);
+            }
+        }
         // ===== КНОПКИ ДЛЯ АВТОРА =====
         if (isAuthor) {
             if (elder.getAssignedOperatorId() == null) {
