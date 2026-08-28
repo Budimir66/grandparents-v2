@@ -1453,27 +1453,39 @@ public class BotService {
                 }
 
                 // ===== ПОЛУЧАЕМ ВНУТРЕННИЙ ID ПОЛЬЗОВАТЕЛЯ =====
+                // ===== ПОЛУЧАЕМ ВНУТРЕННИЙ ID ПОЛЬЗОВАТЕЛЯ (НЕ TELEGRAM_ID!) =====
                 User complainant = userService.findByTelegramId(userId).orElse(null);
                 if (complainant == null) {
                     stateService.clearState(userId);
                     return responseWithMainMenu("❌ Пользователь не найден.");
                 }
 
-                // ===== ОПРЕДЕЛЯЕМ АВТОРА =====
-                Long targetId = elder.getCreatedBy();
+// ===== ОПРЕДЕЛЯЕМ АВТОРА (ТОЖЕ ВНУТРЕННИЙ ID) =====
+                Long targetId = null;
                 String targetName = "Неизвестный (автор не найден)";
 
-                if (targetId != null) {
-                    User target = userService.findById(targetId);
+                if (elder.getCreatedBy() != null) {
+                    // elder.getCreatedBy() — это внутренний ID пользователя!
+                    User target = userService.findById(elder.getCreatedBy());
                     if (target != null) {
+                        targetId = elder.getCreatedBy(); // ← ИСПОЛЬЗУЕМ ВНУТРЕННИЙ ID
                         targetName = target.getFirstName();
                     }
                 }
 
-                // ===== СОХРАНЯЕМ ЖАЛОБУ =====
+// Если автор не найден, пробуем найти по client_telegram_id
+                if (targetId == null && elder.getClientTelegramId() != null) {
+                    User target = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
+                    if (target != null) {
+                        targetId = target.getId(); // ← ВНУТРЕННИЙ ID!
+                        targetName = target.getFirstName();
+                    }
+                }
+
+// ===== СОХРАНЯЕМ ЖАЛОБУ =====
                 Complaint complaint = new Complaint();
-                complaint.setComplainantId(complainant.getId());
-                complaint.setTargetId(targetId != null ? targetId : 0L);
+                complaint.setComplainantId(complainant.getId()); // ← ВНУТРЕННИЙ ID
+                complaint.setTargetId(targetId); // ← ВНУТРЕННИЙ ID
                 complaint.setElderId(elder.getId());
                 complaint.setReason(text != null ? text : "Без причины");
                 complaint.setStatus("PENDING");
