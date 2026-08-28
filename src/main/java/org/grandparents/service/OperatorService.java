@@ -135,9 +135,9 @@ public class OperatorService {
         UniversalResponse response = new UniversalResponse(card.toString());
 
 // ===== КНОПКИ: "Отправить запрос" и "Связаться" в одну строку =====
-        response.addButton("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
-        response.addButton("📱 Связаться через MAX", "contact_client_" + elderId);
-        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+        response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
+        response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
+     //   response.addButtonFullRow("📋 Мои заявки", "my_requests");
         response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
