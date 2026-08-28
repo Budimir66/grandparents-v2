@@ -289,7 +289,19 @@ public class UserStateService {
         viewingFromInterestedMap.remove(userId);
     }
 
+    private final Map<Long, Map<String, Object>> tempData = new ConcurrentHashMap<>();
 
+    public void setTempData(Long userId, String key, Object value) {
+        tempData.computeIfAbsent(userId, k -> new ConcurrentHashMap<>()).put(key, value);
+    }
+
+    public <T> T getTempData(Long userId, String key, Class<T> type) {
+        Map<String, Object> data = tempData.get(userId);
+        if (data == null) return null;
+        Object value = data.get(key);
+        if (value == null) return null;
+        return type.cast(value);
+    }
 
 
 }

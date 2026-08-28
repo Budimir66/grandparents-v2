@@ -699,4 +699,92 @@ public class OperatorService {
         CareHome careHome = careHomeService.findById(careHomeId);
         return careHome != null ? careHome.getName() : "не указан";
     }
+    public UniversalResponse sendCustomMessageToClient(Long userId, Long elderId, String messageText) {
+        Elder elder = elderService.findById(elderId);
+        if (elder == null) {
+            return responseWithMainMenu("❌ Заявка не найдена.");
+        }
+
+        // Проверяем, что оператор взял заявку
+        boolean isAssigned = false;
+        if (elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId)) {
+            isAssigned = true;
+        }
+        if (!isAssigned && elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+            String[] ids = elder.getAssignedOperatorIds().split(",");
+            for (String id : ids) {
+                if (id.trim().equals(String.valueOf(userId))) {
+                    isAssigned = true;
+                    break;
+                }
+            }
+        }
+        if (!isAssigned) {
+            return responseWithMainMenu("❌ Вы не можете связаться с клиентом по этой заявке.");
+        }
+
+        User operator = getUserOrNull(userId);
+        if (operator == null) {
+            return responseWithMainMenu("❌ Оператор не найден.");
+        }
+
+        Long clientId = elder.getClientTelegramId();
+        User client = getUserOrNull(clientId);
+
+        // Формируем сообщение клиенту
+        String careHomeName = "Пансионат (не указан)";
+        if (operator.getCareHomeId() != null) {
+            CareHome careHome = careHomeService.findById(operator.getCareHomeId());
+            if (careHome != null && careHome.getName() != null && !careHome.getName().isEmpty()) {
+                careHomeName = careHome.getName();
+            }
+        }
+
+        String clientMessage = "📩 **Сообщение от оператора пансионата!**\n\n" +
+                "🏢 **" + careHomeName + "**\n" +
+                "👤 **Оператор:** " + operator.getFirstName() + "\n" +
+                "📋 **По заявке #" + elderId + "**\n\n" +
+                "━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                "💬 **Сообщение:**\n" +
+                messageText + "\n" +
+                "━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                "📌 Вы можете ответить на это сообщение прямо сейчас.";
+
+        UniversalResponse clientResponse = new UniversalResponse(clientMessage);
+        clientResponse.addButtonFullRow("👤 Моя заявка", "my_request");
+        clientResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+        // Отправляем клиенту
+        boolean sentToClient = false;
+        if (client != null && client.getChatId() != null) {
+            try {
+                messageSender.sendMessage(client.getChatId(), clientResponse);
+                sentToClient = true;
+                log.info("📨 Пользовательское сообщение отправлено клиенту {}", clientId);
+            } catch (Exception e) {
+                log.error("❌ Ошибка отправки клиенту: {}", e.getMessage(), e);
+            }
+        }
+
+        // Ответ оператору
+        String responseText;
+        if (sentToClient) {
+            responseText = "✅ **Ваше сообщение отправлено клиенту!**\n\n" +
+                    "📩 Текст вашего сообщения:\n" +
+                    "━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                    messageText + "\n" +
+                    "━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+                    "Ожидайте ответа от клиента.";
+        } else {
+            responseText = "⚠️ **Не удалось отправить сообщение.**\n\n" +
+                    "Клиент не зарегистрирован в MAX.\n" +
+                    "📞 **Телефон клиента:** " + (elder.getClientPhone() != null ? elder.getClientPhone() : "не указан") + "\n\n" +
+                    "Позвоните клиенту по телефону.";
+        }
+
+        UniversalResponse response = new UniversalResponse(responseText);
+        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
+    }
 }

@@ -1154,7 +1154,18 @@ public class BotService {
         if (callbackData.startsWith("contact_client_")) {
             String elderIdStr = callbackData.substring("contact_client_".length());
             Long elderId = Long.parseLong(elderIdStr);
-            return operatorService.contactClient(userId, elderId);
+
+            // Сохраняем ID заявки в состояние
+            stateService.setTempData(userId, "contact_elder_id", elderId);
+            stateService.setState(userId, DialogState.AWAITING_CONTACT_MESSAGE);
+
+            UniversalResponse response = new UniversalResponse(
+                    "✏️ **Введите текст сообщения для клиента:**\n\n" +
+                            "Напишите всё, что хотите сказать клиенту.\n" +
+                            "Бот отправит ваше сообщение в MAX."
+            );
+            response.addButton("❌ Отменить", "cancel_action");
+            return response;
         }
 
         // ===== АДМИН: УПРАВЛЕНИЕ ОПЕРАТОРАМИ =====
@@ -1349,6 +1360,31 @@ public class BotService {
         UniversalResponse response = new UniversalResponse();
         log.info("📥 handleDialogInput: userId={}, state={}, text={}", userId, state, text);
         switch (state) {
+
+            case AWAITING_CONTACT_MESSAGE -> {
+                // Проверяем, что текст не пустой
+                if (text == null || text.trim().isEmpty()) {
+                    response = new UniversalResponse(
+                            "❌ Сообщение не может быть пустым.\n\n" +
+                                    "Введите текст для клиента:"
+                    );
+                    response.addButton("❌ Отменить", "cancel_action");
+                    return response;
+                }
+
+                // Получаем ID заявки из состояния
+                Long elderId = stateService.getTempData(userId, "contact_elder_id", Long.class);
+                if (elderId == null) {
+                    stateService.clearState(userId);
+                    return responseWithMainMenu("❌ Заявка не найдена.");
+                }
+
+                // Отправляем сообщение клиенту
+                UniversalResponse result = operatorService.sendCustomMessageToClient(userId, elderId, text);
+
+                stateService.clearState(userId);
+                return result;
+            }
 
             case AWAITING_OPERATOR_PROFILE_NAME,
                  AWAITING_OPERATOR_PROFILE_PHONE,
