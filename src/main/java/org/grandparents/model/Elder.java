@@ -118,6 +118,9 @@ public class Elder {
     @Column(name = "assigned_operator_ids", columnDefinition = "TEXT")
     private String assignedOperatorIds; // "1001,1002,1003"
 
+    @Column(name = "last_operator_id")
+    private Long lastOperatorId;
+
     // ===== КОНСТРУКТОРЫ =====
     public Elder() {
     }
@@ -140,6 +143,14 @@ public class Elder {
     }
 
     // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
+
+    public Long getLastOperatorId() {
+        return lastOperatorId;
+    }
+
+    public void setLastOperatorId(Long lastOperatorId) {
+        this.lastOperatorId = lastOperatorId;
+    }
 
     public String getAssignedOperatorIds() { return assignedOperatorIds; }
     public void setAssignedOperatorIds(String assignedOperatorIds) { this.assignedOperatorIds = assignedOperatorIds; }
@@ -295,4 +306,5 @@ public class Elder {
                 .map(Long::parseLong)
                 .collect(Collectors.toList());
     }
+
 }

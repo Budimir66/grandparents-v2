@@ -516,6 +516,10 @@ public class OperatorService {
             return responseWithMainMenu("❌ Оператор не найден.");
         }
 
+        // Сохраняем, кто написал клиенту
+        elder.setLastOperatorId(userId);  // ← userId уже Long
+        elderService.updateElder(elder);
+
         // ===== ПОЛУЧАЕМ НАЗВАНИЕ ПАНСИОНАТА =====
         String careHomeName = "Пансионат (не указан)";
         if (operator.getCareHomeId() != null) {

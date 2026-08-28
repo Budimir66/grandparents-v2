@@ -140,6 +140,59 @@ public class BotService {
             return handleStartCommand(userId, chatId);
         }
 
+        // В методе handleMessage, после создания пользователя
+        if (text != null && !text.startsWith("/") && callbackData == null) {
+            // Проверяем, есть ли у клиента заявка в работе
+            List<Elder> activeElders = elderService.findByClientTelegramId(userId)
+                    .stream()
+                    .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS)
+                    .collect(Collectors.toList());
+
+            if (!activeElders.isEmpty()) {
+                // Берём первую заявку в работе
+                Elder elder = activeElders.get(0);
+
+                // Проверяем, есть ли у заявки оператор
+                if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+                    String[] ids = elder.getAssignedOperatorIds().split(",");
+                    String operatorIdStr = ids[0]; // Берём первого оператора
+
+                    try {
+                        Long operatorId = Long.parseLong(operatorIdStr.trim());
+                        User operator = userService.findByTelegramId(operatorId).orElse(null);
+
+                        if (operator != null && operator.getChatId() != null) {
+                            // Пересылаем ответ оператору
+                            UniversalResponse forward = new UniversalResponse(
+                                    "📩 **Новое сообщение от клиента!**\n\n" +
+                                            "📋 **По заявке #" + elder.getId() + "**\n" +
+                                            "👤 **Клиент:** " + (user.getFirstName() != null ? user.getFirstName() : "Клиент") + "\n\n" +
+                                            "💬 **Сообщение:**\n" +
+                                            text + "\n\n" +
+                                            "📌 Ответьте клиенту через кнопку 'Связаться через MAX'."
+                            );
+                            forward.addButtonFullRow("📋 Мои заявки", "my_requests");
+                            forward.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                            messageSender.sendMessage(operator.getChatId(), forward);
+
+                            // Подтверждение клиенту
+                            UniversalResponse clientResponse = new UniversalResponse(
+                                    "✅ **Ваше сообщение отправлено оператору!**\n\n" +
+                                            "📩 Оператор получит ваше сообщение и свяжется с вами."
+                            );
+                            clientResponse.addButtonFullRow("👤 Моя заявка", "my_request");
+                            clientResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                            return clientResponse;
+                        }
+                    } catch (NumberFormatException e) {
+                        log.error("❌ Ошибка парсинга operatorId: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
         // ===== ОБРАБОТКА КНОПОК =====
         if (callbackData != null) {
             return handleCallback(userId, chatId, callbackData);
