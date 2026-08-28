@@ -2486,7 +2486,11 @@ public class BotService {
             if (isAssigned) {
                 // Кнопки для заявки, которая уже в работе у этого оператора
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
-                response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
+
+                // ===== ПРОВЕРКА: показываем кнопку ТОЛЬКО если заявка создана клиентом =====
+                if (elder.getClientTelegramId() != null) {
+                    response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
+                }
 
                 // Оценка заявки
                 if (elder.getCreatedBy() != null) {
