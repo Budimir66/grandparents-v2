@@ -2560,7 +2560,12 @@ public class BotService {
         // ===== КНОПКИ В ЗАВИСИМОСТИ ОТ РАЗДЕЛА =====
         if (viewingFromInterested) {
             // Раздел "Интересные"
-            response.addButtonFullRow("⭐ Убрать из интересных", "remove_from_interested_" + elderId);
+            response.addButtonFullRow("✖️ Убрать из интересных", "remove_from_interested_" + elderId);
+
+            // Кнопка "Взять в работу" (если заявка новая или предложена)
+            if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
+                response.addButtonFullRow("✅ Взять в работу", "take_elder_" + elderId);
+            }
         } else if (isOperator && !isAuthor) {
             // Раздел "Поиск заявок" — кнопки для взятия в работу
             if (elder.getStatus() == ElderStatus.NEW || elder.getStatus() == ElderStatus.OFFERED) {
