@@ -237,7 +237,7 @@ public class ElderFormService {
                 // Ищем пользователя по telegram_id
                 User user = userService.findByTelegramId(userId).orElse(null);
 
-                // Проверяем роль
+                // Проверяем, является ли пользователь оператором или администратором
                 boolean isOperator = user != null &&
                         (user.getAccessLevel() == AccessLevel.MANAGER ||
                                 user.getAccessLevel() == AccessLevel.ADMIN);
@@ -245,11 +245,13 @@ public class ElderFormService {
                 response = new UniversalResponse();
 
                 if (isOperator) {
+                    // Для операторов — ТОЛЬКО ручной ввод номера клиента
                     response.setText("📱 Введите номер телефона КЛИЕНТА для связи\n\n" +
                             "Укажите актуальный номер, по которому можно связаться с семьёй:");
                     response.addButton("✏️ Ввести номер", "enter_phone_manually");
                     response.addButton("❌ Отменить", "cancel_action");
                 } else {
+                    // Для клиентов — ручной ввод ИЛИ отправка из MAX (в одну строку)
                     response.setText("📱 Введите номер телефона для связи\n\n" +
                             "Вы можете ввести номер вручную или поделиться из MAX:");
                     response.addButton("✏️ Ввести вручную", "enter_phone_manually");
@@ -257,6 +259,7 @@ public class ElderFormService {
                     response.addButton("❌ Отменить", "cancel_action");
                 }
 
+                // Отправляем сообщение (если у вас тут есть отправка)
                 messageSender.sendMessage(userId, response);
             }
 
