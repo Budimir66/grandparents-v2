@@ -230,29 +230,34 @@ public class ElderFormService {
             }
 
             case AWAITING_ELDER_LOCATION -> {
-                // Ограничение: 100 символов
+                // Сохраняем локацию
                 tempElder.setPreferredLocation(truncateText(text, 100));
                 stateService.setState(userId, DialogState.AWAITING_ELDER_PHONE);
 
-                // Получаем пользователя и проверяем его роль
-                User user = userService.findById(userId);
-                boolean isOperator = user.getAccessLevel() == AccessLevel.MANAGER ||
-                        user.getAccessLevel() == AccessLevel.ADMIN;
+                // Ищем пользователя по telegram_id
+                User user = userService.findByTelegramId(userId).orElse(null);
+
+                // Проверяем роль
+                boolean isOperator = user != null &&
+                        (user.getAccessLevel() == AccessLevel.MANAGER ||
+                                user.getAccessLevel() == AccessLevel.ADMIN);
+
+                response = new UniversalResponse();
 
                 if (isOperator) {
-                    // Для операторов — только ручной ввод номера клиента
                     response.setText("📱 Введите номер телефона КЛИЕНТА для связи\n\n" +
                             "Укажите актуальный номер, по которому можно связаться с семьёй:");
                     response.addButton("✏️ Ввести номер", "enter_phone_manually");
                     response.addButton("❌ Отменить", "cancel_action");
                 } else {
-                    // Для клиентов — ручной ввод ИЛИ отправка из MAX
                     response.setText("📱 Введите номер телефона для связи\n\n" +
                             "Вы можете ввести номер вручную или поделиться из MAX:");
                     response.addButton("✏️ Ввести вручную", "enter_phone_manually");
                     response.addButton("📱 Отправить номер из MAX", "request_contact_from_max");
                     response.addButton("❌ Отменить", "cancel_action");
                 }
+
+                messageSender.sendMessage(userId, response);
             }
 
             case AWAITING_ELDER_PHONE_MANUAL -> {
