@@ -38,5 +38,5 @@ public interface OperatorReactionRepository extends JpaRepository<OperatorReacti
             @Param("operatorId") Long operatorId,
             @Param("elderId") Long elderId
     );
-
+    boolean existsByOperatorIdAndElderIdAndReaction(Long operatorId, Long elderId, String reaction);
 }

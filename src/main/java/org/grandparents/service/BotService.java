@@ -2519,7 +2519,12 @@ public class BotService {
         boolean isAuthor = elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId);
 
         // ===== ПРОВЕРЯЕМ, ОТКРЫЛ ЛИ ОПЕРАТОР ЗАЯВКУ ИЗ "ИНТЕРЕСНЫХ" =====
-        boolean viewingFromInterested = stateService.isViewingFromInterested(userId);
+      //  boolean viewingFromInterested = stateService.isViewingFromInterested(userId);
+
+        // Проверяем, есть ли реакция "INTERESTED" на эту заявку
+        boolean viewingFromInterested = reactionRepository.existsByOperatorIdAndElderIdAndReaction(
+                userId, elderId, "INTERESTED"
+        );
 
         // ===== ФОРМИРУЕМ КАРТОЧКУ =====
         String card = "📋 **Заявка #" + elder.getId() + "**\n\n" +
