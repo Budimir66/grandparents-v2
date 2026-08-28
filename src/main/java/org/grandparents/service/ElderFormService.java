@@ -514,8 +514,8 @@ public class ElderFormService {
         if (elder.getAssignedOperatorId() != null) {
             User author = userService.findById(userId);
             if (author != null) {
-                // Списываем 3 балла
-                author.addBonusPoints(-3);
+                // Списываем -1 балл
+                author.addBonusPoints(-1);
                 userService.saveUser(author);
 
                 // Уведомляем оператора, который вёл заявку
@@ -582,7 +582,7 @@ public class ElderFormService {
         if (elder.getAssignedOperatorId() != null) {
             User author = userService.findById(userId);
             if (author != null) {
-                author.addBonusPoints(-3);
+                author.addBonusPoints(-1);
                 userService.saveUser(author);
 
                 // Уведомляем оператора

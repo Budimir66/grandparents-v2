@@ -3100,60 +3100,62 @@ public class BotService {
     // ============================================================
 
 
+    // ===== МОЯ ЗАЯВКА (ДЛЯ КЛИЕНТА) =====
     private UniversalResponse showMyRequest(Long userId) {
-        List<Elder> allElders = elderService.findByClientTelegramId(userId);
+        User user = getUserOrNull(userId);
+        if (user == null) {
+            return responseWithMainMenu("❌ Пользователь не найден.");
+        }
 
-        List<Elder> activeElders = allElders.stream()
-                .filter(e -> e.getStatus() != ElderStatus.DELETED)
-                .filter(e -> e.getStatus() != ElderStatus.EXPIRED)
-                .filter(e -> e.getStatus() != ElderStatus.COMPLETED)
-                .collect(Collectors.toList());
-
-        if (activeElders.isEmpty()) {
+        List<Elder> elders = elderService.findByClientTelegramId(userId);
+        if (elders.isEmpty()) {
             UniversalResponse response = new UniversalResponse(
-                    "👤 **У вас нет активной заявки.**\n\n" +
-                            "Нажмите кнопку ниже, чтобы создать заявку."
+                    "❌ У вас нет активных заявок.\n\n" +
+                            "Создайте новую заявку, чтобы операторы пансионатов могли с вами связаться."
             );
             response.addButton("📝 Создать заявку", "new_request");
             response.addButton("🏠 Главное меню", "main_menu");
             return response;
         }
 
-        Elder elder = activeElders.get(0);
+        // Берём самую свежую заявку
+        Elder elder = elders.stream()
+                .max((e1, e2) -> e1.getCreatedAt().compareTo(e2.getCreatedAt()))
+                .orElse(elders.get(0));
 
-        String statusDisplay = elder.getStatus().getDisplayName();
-        if (elder.getStatus() == ElderStatus.PENDING) {
-            statusDisplay = "⏳ На модерации";
+        // ===== ФОРМИРУЕМ ТЕКСТ ЗАЯВКИ =====
+        StringBuilder text = new StringBuilder();
+        text.append("📋 **Заявка #").append(elder.getId()).append("**\n\n");
+        text.append("👤 **Подопечный:** ").append(elder.getFullName()).append("\n");
+        text.append("🎂 **Возраст:** ").append(elder.getAge()).append(" лет\n");
+        text.append("💊 **Здоровье:** ").append(elder.getHealthCondition()).append("\n");
+        text.append("💰 **Бюджет:** ").append(elder.getBudget()).append(" руб.\n");
+        text.append("📍 **Локация:** ").append(elder.getPreferredLocation()).append("\n");
+        text.append("📌 **Статус:** ").append(getStatusIcon(elder.getStatus())).append(" ").append(elder.getStatus().getDisplayName()).append("\n");
+
+        UniversalResponse response = new UniversalResponse(text.toString());
+
+        // ===== КНОПКИ ДЛЯ АВТОРА (клиента) =====
+        boolean isAuthor = elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId);
+        boolean isClient = elder.getClientTelegramId().equals(userId);
+
+        if (isAuthor || isClient) {
+            // Если заявка не завершена, не удалена и не истекла
+            if (elder.getStatus() != ElderStatus.COMPLETED &&
+                    elder.getStatus() != ElderStatus.DELETED &&
+                    elder.getStatus() != ElderStatus.EXPIRED) {
+
+                // Кнопка "Редактировать"
+                response.addButton("✏️ Редактировать", "edit_elder_" + elder.getId());
+
+                // Кнопка "Удалить" — с подтверждением
+                response.addButton("🗑️ Удалить", "delete_elder_" + elder.getId());
+            }
         }
 
-        String card = "👤 **Моя заявка #" + elder.getId() + "**\n\n" +
-                "👤 **Подопечный:** " + elder.getFullName() + "\n" +
-                "🎂 **Возраст:** " + elder.getAge() + " лет\n" +
-                "💊 **Здоровье:** " + elder.getHealthCondition() + "\n" +
-                "💰 **Бюджет:** " + elder.getBudget() + " руб.\n" +
-                "📍 **Локация:** " + elder.getPreferredLocation() + "\n" +
-                "📝 **Пожелания:** " + elder.getRequirements() + "\n" +
-                "📌 **Статус:** " + statusDisplay;
-
-        UniversalResponse response = new UniversalResponse(card);
-
-        if (elder.getAssignedOperatorId() == null &&
-                elder.getStatus() != ElderStatus.COMPLETED &&
-                elder.getStatus() != ElderStatus.EXPIRED &&
-                elder.getStatus() != ElderStatus.DELETED) {
-            response.addButton("✏️ Редактировать", "edit_elder_" + elder.getId());
-            response.addButton("🗑️ Удалить", "delete_elder_" + elder.getId());
-        }
-
-        if (elder.getStatus() == ElderStatus.COMPLETED) {
-            response.addButton("✅ Заявка завершена", "main_menu");
-        }
-
-        if (elder.getStatus() == ElderStatus.EXPIRED) {
-            response.addButton("⏰ Заявка истекла", "main_menu");
-        }
-
+        // Кнопка "Главное меню" всегда в конце
         response.addButton("🏠 Главное меню", "main_menu");
+
         return response;
     }
 
