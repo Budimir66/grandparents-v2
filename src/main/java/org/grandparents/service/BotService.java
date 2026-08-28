@@ -2560,7 +2560,6 @@ public class BotService {
 
         // ===== ЕСЛИ ЗАЯВКА УЖЕ В РАБОТЕ — ПОКАЗЫВАЕМ КНОПКИ ДЛЯ ОПЕРАТОРА =====
         if (elder.getStatus() == ElderStatus.IN_PROGRESS) {
-            // Проверяем, что текущий пользователь — тот, кто взял заявку
             boolean isAssigned = false;
             if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
                 String[] ids = elder.getAssignedOperatorIds().split(",");
@@ -2573,15 +2572,12 @@ public class BotService {
             }
 
             if (isAssigned) {
-                // Кнопки для заявки, которая уже в работе у этого оператора
                 response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
 
-                // ===== ПРОВЕРКА: показываем кнопку ТОЛЬКО если заявка создана клиентом =====
                 if (elder.getClientTelegramId() != null) {
                     response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
                 }
 
-                // Оценка заявки
                 if (elder.getCreatedBy() != null) {
                     User author = getUserOrNull(elder.getCreatedBy());
                     if (author != null && isOperator(author)) {
@@ -2591,6 +2587,11 @@ public class BotService {
                         }
                     }
                 }
+            }
+
+            // ===== КНОПКА "ПОЖАЛОВАТЬСЯ" — ТОЛЬКО ДЛЯ ЗАЯВОК В РАБОТЕ, КРОМЕ АВТОРА =====
+            if (!isAuthor) {
+                response.addButtonFullRow("🚨 Пожаловаться", "complaint_" + elderId);
             }
         }
 
