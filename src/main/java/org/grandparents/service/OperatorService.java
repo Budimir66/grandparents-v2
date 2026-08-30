@@ -64,14 +64,11 @@ public class OperatorService {
             return responseWithMainMenu("❌ Эта заявка уже завершена или удалена.");
         }
 
-        // ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
-        // ===== ГЛАВНОЕ: ДОБАВЛЯЕМ ОПЕРАТОРА В assigned_operator_ids =====
-        // ===== ===== ===== ===== ===== ===== ===== ===== ===== =====
+        // ===== ДОБАВЛЯЕМ ОПЕРАТОРА В assigned_operator_ids =====
         String currentIds = elder.getAssignedOperatorIds();
         if (currentIds == null || currentIds.isEmpty()) {
             elder.setAssignedOperatorIds(String.valueOf(userId));
         } else {
-            // Проверяем, не добавлен ли уже
             if (!currentIds.contains(String.valueOf(userId))) {
                 elder.setAssignedOperatorIds(currentIds + "," + userId);
             }
@@ -84,14 +81,17 @@ public class OperatorService {
         elder.setTakenAt(LocalDateTime.now());
         elderService.updateElder(elder);
 
-        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ =====
+        // ============================================================
+        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ (ИСПРАВЛЕНО!) =====
+        // ============================================================
         if (elder.getBonusPointsAwarded() == null || !elder.getBonusPointsAwarded()) {
-            User author = getUserOrNull(elder.getCreatedBy());
+            User author = getUserOrNull(elder.getCreatedBy());  // ← ИСПРАВЛЕНО!
             if (author != null) {
                 author.addBonusPoints(-1);
                 userService.saveUser(author);
                 elder.setBonusPointsAwarded(true);
                 elderService.updateElder(elder);
+                log.info("📊 У автора {} списано 1 балл за заявку #{}", author.getId(), elderId);
             }
         }
 
@@ -108,6 +108,7 @@ public class OperatorService {
                 );
             }
         }
+
 
         // ===== ОТВЕТ ОПЕРАТОРУ =====
         User author = userService.findById(elder.getCreatedBy());
