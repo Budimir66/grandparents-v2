@@ -76,16 +76,17 @@ public class OperatorService {
         if (currentIds == null || currentIds.isEmpty()) {
             elder.setAssignedOperatorIds(String.valueOf(userId));
         } else {
+            // Проверяем, есть ли уже этот оператор в списке
             if (!currentIds.contains(String.valueOf(userId))) {
                 elder.setAssignedOperatorIds(currentIds + "," + userId);
             }
         }
+        log.info("📌 assigned_operator_ids после обновления: {}", elder.getAssignedOperatorIds());
 
         // ===== МЕНЯЕМ СТАТУС НА IN_PROGRESS =====
-        if (elder.getStatus() == ElderStatus.NEW) {
-            elder.setStatus(ElderStatus.IN_PROGRESS);
-        }
+        elder.setStatus(ElderStatus.IN_PROGRESS);
         elder.setTakenAt(LocalDateTime.now());
+        elder.setAssignedOperatorId(userId); // ← ДОБАВЛЯЕМ! Для совместимости
         elderService.updateElder(elder);
 
         // ============================================================
@@ -115,7 +116,8 @@ public class OperatorService {
         userService.saveUser(user);
         bonusSpent = 1;
         bonusAfter = user.getBonusPoints();
-        log.info("📊 У оператора {} списан 1 балл за взятие заявки #{}", userId, elderId);
+        log.info("📊 У оператора {} списан 1 балл за взятие заявки #{}. Новый баланс: {}",
+                userId, elderId, bonusAfter);
 
         // ===== УВЕДОМЛЯЕМ КЛИЕНТА =====
         if (elder.getCreatedBy() != null) {
@@ -131,9 +133,9 @@ public class OperatorService {
             }
         }
 
-        // ===== ФОРМИРУЕМ ОТВЕТ =====
+        // ===== ФОРМИРУЕМ ОТВЕТ С БАЛЛАМИ =====
         StringBuilder card = new StringBuilder();
-        card.append("✅ **Заявка #").append(elderId).append(" взята в работу!**\n\n");
+        card.append("✅ **Вы взяли заявку #").append(elderId).append(" в работу!**\n\n");
         card.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
         card.append("💰 **Списано баллов:** -").append(bonusSpent).append("\n");
         card.append("💰 **Осталось баллов:** ").append(bonusAfter).append("\n");
