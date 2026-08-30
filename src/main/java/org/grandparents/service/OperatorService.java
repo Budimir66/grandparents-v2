@@ -64,6 +64,13 @@ public class OperatorService {
             return responseWithMainMenu("❌ Эта заявка уже завершена или удалена.");
         }
 
+        // ===== ПРОВЕРКА: ДОСТАТОЧНО ЛИ БАЛЛОВ У ОПЕРАТОРА =====
+        if (user.getBonusPoints() < 1) {
+            return responseWithMainMenu("❌ У вас недостаточно баллов для взятия заявки.\n\n" +
+                    "💰 Ваш баланс: " + user.getBonusPoints() + " баллов.\n" +
+                    "📌 Для получения баллов создавайте и закрывайте заявки.");
+        }
+
         // ===== ДОБАВЛЯЕМ ОПЕРАТОРА В assigned_operator_ids =====
         String currentIds = elder.getAssignedOperatorIds();
         if (currentIds == null || currentIds.isEmpty()) {
@@ -82,18 +89,33 @@ public class OperatorService {
         elderService.updateElder(elder);
 
         // ============================================================
-        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ (ИСПРАВЛЕНО!) =====
+        // ===== ОБЪЯВЛЯЕМ ПЕРЕМЕННЫЕ ДЛЯ ОТВЕТА =====
+        // ============================================================
+        int bonusSpent = 0;
+        int bonusAfter = 0;
+
+        // ============================================================
+        // ===== НАЧИСЛЯЕМ БАЛЛЫ АВТОРУ =====
         // ============================================================
         if (elder.getBonusPointsAwarded() == null || !elder.getBonusPointsAwarded()) {
-            User author = getUserOrNull(elder.getCreatedBy());  // ← ИСПРАВЛЕНО!
+            User author = getUserOrNull(elder.getCreatedBy());
             if (author != null) {
-                author.addBonusPoints(-1);
+                author.addBonusPoints(+1);
                 userService.saveUser(author);
                 elder.setBonusPointsAwarded(true);
                 elderService.updateElder(elder);
-                log.info("📊 У автора {} списано 1 балл за заявку #{}", author.getId(), elderId);
+                log.info("📊 Автору {} начислен 1 балл за заявку #{}", author.getId(), elderId);
             }
         }
+
+        // ============================================================
+        // ===== СПИСЫВАЕМ БАЛЛЫ У ОПЕРАТОРА =====
+        // ============================================================
+        user.addBonusPoints(-1);
+        userService.saveUser(user);
+        bonusSpent = 1;
+        bonusAfter = user.getBonusPoints();
+        log.info("📊 У оператора {} списан 1 балл за взятие заявки #{}", userId, elderId);
 
         // ===== УВЕДОМЛЯЕМ КЛИЕНТА =====
         if (elder.getCreatedBy() != null) {
@@ -109,12 +131,7 @@ public class OperatorService {
             }
         }
 
-
-        // ===== ОТВЕТ ОПЕРАТОРУ =====
-        User author = userService.findById(elder.getCreatedBy());
-        int bonusAfter = user.getBonusPoints();
-        int bonusSpent = 1; // списывается 1 балл
-
+        // ===== ФОРМИРУЕМ ОТВЕТ =====
         StringBuilder card = new StringBuilder();
         card.append("✅ **Заявка #").append(elderId).append(" взята в работу!**\n\n");
         card.append("━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -135,10 +152,9 @@ public class OperatorService {
 
         UniversalResponse response = new UniversalResponse(card.toString());
 
-// ===== КНОПКИ: "Отправить запрос" и "Связаться" в одну строку =====
+        // ===== КНОПКИ =====
         response.addButtonFullRow("📨 Отправить запрос на закрытие", "request_complete_elder_" + elderId);
         response.addButtonFullRow("📱 Связаться через MAX", "contact_client_" + elderId);
-     //   response.addButtonFullRow("📋 Мои заявки", "my_requests");
         response.addButtonFullRow("🔍 Поиск заявок", "find_requests");
         response.addButtonFullRow("🏠 Главное меню", "main_menu");
         return response;
