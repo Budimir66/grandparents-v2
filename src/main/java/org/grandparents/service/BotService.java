@@ -3035,7 +3035,10 @@ public class BotService {
         // ===== 1. Получаем ID заявок, которые оператор уже отметил как "Интересные" =====
         List<Long> interestedElderIds = reactionRepository.findInterestedElderIdsByOperatorId(userId);
 
-        // ===== 2. Получаем все активные заявки, исключая уже "Интересные" =====
+        // ===== 1.1. Получаем ID заявок, которые оператор отметил как "Не подходит" ===== ← НОВОЕ
+        List<Long> notInterestedElderIds = reactionRepository.findNotInterestedElderIdsByOperatorId(userId);
+
+        // ===== 2. Получаем все активные заявки =====
         List<Elder> allElders = elderService.findActiveElders();
 
         // ===== СОРТИРУЕМ: НОВЫЕ СВЕРХУ =====
@@ -3044,21 +3047,26 @@ public class BotService {
                     LocalDateTime d1 = e1.getCreatedAt();
                     LocalDateTime d2 = e2.getCreatedAt();
                     if (d1 == null && d2 == null) return 0;
-                    if (d1 == null) return 1;   // null считается старше
-                    if (d2 == null) return -1;  // null считается старше
-                    return d2.compareTo(d1);    // новые сверху
+                    if (d1 == null) return 1;
+                    if (d2 == null) return -1;
+                    return d2.compareTo(d1);
                 })
                 .collect(Collectors.toList());
 
-        // Фильтруем: исключаем заявки, которые уже в "Интересных" у этого оператора
+        // Фильтруем: исключаем заявки, которые уже в "Интересных", "Не подходят" или взяты в работу
         List<Elder> filteredElders = allElders.stream()
-                .filter(elder -> !interestedElderIds.contains(elder.getId()))
+                .filter(elder -> !interestedElderIds.contains(elder.getId())) // ← Было
+                .filter(elder -> !notInterestedElderIds.contains(elder.getId())) // ← НОВОЕ
                 .filter(elder -> {
-                    // ===== 3. Применяем остальные фильтры (город, бюджет, дата) =====
+                    // ===== ИСКЛЮЧАЕМ ЗАЯВКИ, КОТОРЫЕ ОПЕРАТОР УЖЕ ВЗЯЛ В РАБОТУ ===== ← НОВОЕ
+                    if (elder.getAssignedOperatorIds() != null &&
+                            elder.getAssignedOperatorIds().contains(String.valueOf(userId))) {
+                        return false;
+                    }
+
+                    // ===== Применяем остальные фильтры (город, бюджет, дата) =====
                     boolean filterTodayOnly = stateService.isFilterTodayOnly(userId);
 
-                    // Фильтр по дате
-                    // Фильтр по дате
                     if (filterTodayOnly) {
                         if (elder.getCreatedAt() == null) {
                             return false;

@@ -45,4 +45,5 @@ public interface ElderRepository extends JpaRepository<Elder, Long> {
     long countActiveElders(@Param("statuses") List<ElderStatus> statuses);
     // ElderRepository.java
     List<Elder> findByStatusNotInOrderByCreatedAtDesc(List<ElderStatus> statuses);
+
 }

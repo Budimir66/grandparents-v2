@@ -39,4 +39,6 @@ public interface OperatorReactionRepository extends JpaRepository<OperatorReacti
             @Param("elderId") Long elderId
     );
     boolean existsByOperatorIdAndElderIdAndReaction(Long operatorId, Long elderId, String reaction);
+    @Query("SELECT r.elderId FROM OperatorReaction r WHERE r.operatorId = :operatorId AND r.reaction = 'NOT_INTERESTED'")
+    List<Long> findNotInterestedElderIdsByOperatorId(@Param("operatorId") Long operatorId);
 }
