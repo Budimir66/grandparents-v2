@@ -103,30 +103,6 @@ public class BotService {
         Long userId = Long.parseLong(message.getUserId());
         String chatId = message.getChatId();
 
-
-
-        // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ПОЛЬЗОВАТЕЛЬ АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
-        if (text != null && !text.isEmpty() && !text.startsWith("/")) {
-            User user = userService.findByTelegramId(userId).orElse(null);
-
-            // ===== ЕСЛИ ПОЛЬЗОВАТЕЛЬ УЖЕ ЗАРЕГИСТРИРОВАН (НЕ GUEST) — ПРОПУСКАЕМ =====
-            if (user != null && user.getAccessLevel() != AccessLevel.GUEST) {
-                // Пользователь уже оператор/менеджер/админ — проверку токена НЕ делаем
-                // Ничего не делаем, просто пропускаем
-            } else {
-                // ===== ТОЛЬКО ДЛЯ НЕЗАРЕГИСТРИРОВАННЫХ ПОЛЬЗОВАТЕЛЕЙ (GUEST) =====
-                // Проверяем формат токена: "НАЗВАНИЕ + ПРОБЕЛ + 4 ЦИФРЫ"
-                String trimmed = text.trim();
-                if (trimmed.matches(".*\\s\\d{4}$")) {
-                    String cleanText = trimmed.replaceAll("\\s+\\d{4}$", "").trim();
-                    CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
-                    if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
-                        return handleAcceptInvitation(userId, careHome.getId());
-                    }
-                }
-            }
-        }
-
         // ===== СОЗДАЁМ ПОЛЬЗОВАТЕЛЯ, ЕСЛИ ЕГО НЕТ =====
         User user = userService.findByTelegramId(userId).orElse(null);
         boolean isNewUser = false;
@@ -141,7 +117,6 @@ public class BotService {
             isNewUser = true;
             log.info("👤 Создан новый пользователь: {}", userId);
         } else {
-            // Обновляем chatId на всякий случай (может измениться)
             user.setChatId(Long.parseLong(chatId));
             userService.saveUser(user);
         }
@@ -150,22 +125,58 @@ public class BotService {
         if (isNewUser || "/start".equalsIgnoreCase(text)) {
             return handleStartCommand(userId, chatId);
         }
-// ===== ПРОВЕРКА: ЯВЛЯЕТСЯ ЛИ СООБЩЕНИЕ ОТВЕТОМ КЛИЕНТУ =====
-        if (text != null && !text.isEmpty() && !text.startsWith("/") && callbackData == null) {
-             user = userService.findByTelegramId(userId).orElse(null);
 
-            // Если пользователь — оператор или менеджер
-            if (user != null && (user.getAccessLevel() == AccessLevel.OPERATOR ||
-                    user.getAccessLevel() == AccessLevel.MANAGER)) {
+        // ===== ПРОВЕРКА ТОКЕНА ПРИГЛАШЕНИЯ (ТОЛЬКО ДЛЯ GUEST) =====
+        if (text != null && !text.isEmpty() && !text.startsWith("/") && user.getAccessLevel() == AccessLevel.GUEST) {
+            String trimmed = text.trim();
+            if (trimmed.matches(".*\\s\\d{4}$")) {
+                String cleanText = trimmed.replaceAll("\\s+\\d{4}$", "").trim();
+                CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
+                if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
+                    return handleAcceptInvitation(userId, careHome.getId());
+                }
+            }
+        }
 
-                // Ищем активную заявку, где этот оператор назначен
+        // ===== ОБРАБОТКА КНОПОК (CALLBACK) =====
+        if (callbackData != null) {
+            return handleCallback(userId, chatId, callbackData);
+        }
+
+        // =============================================================
+        // ===== ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ОТ ОПЕРАТОРОВ =====
+        // =============================================================
+        if (text != null && !text.isEmpty() && !text.startsWith("/")) {
+            // Проверяем, является ли пользователь оператором или менеджером
+            if (user.getAccessLevel() == AccessLevel.OPERATOR ||
+                    user.getAccessLevel() == AccessLevel.MANAGER) {
+
+                // Ищем активную заявку в работе у этого оператора
                 List<Elder> activeElders = elderService.findByAssignedOperatorId(userId)
                         .stream()
                         .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS)
                         .collect(Collectors.toList());
 
+                // Проверяем также assigned_operator_ids (если заявка взята через старую логику)
+                if (activeElders.isEmpty()) {
+                    List<Elder> allActive = elderService.findActiveElders();
+                    activeElders = allActive.stream()
+                            .filter(e -> {
+                                if (e.getAssignedOperatorIds() != null && !e.getAssignedOperatorIds().isEmpty()) {
+                                    String[] ids = e.getAssignedOperatorIds().split(",");
+                                    for (String id : ids) {
+                                        if (id.trim().equals(String.valueOf(userId))) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                                return false;
+                            })
+                            .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS)
+                            .collect(Collectors.toList());
+                }
+
                 if (!activeElders.isEmpty()) {
-                    // Берём первую активную заявку
                     Elder elder = activeElders.get(0);
 
                     // Проверяем, есть ли у заявки клиент
@@ -199,67 +210,6 @@ public class BotService {
                     }
                 }
             }
-        }
-        // В методе handleMessage, после создания пользователя
-        if (text != null && !text.startsWith("/") && callbackData == null) {
-            // Проверяем, есть ли у клиента заявка в работе
-            List<Elder> activeElders = elderService.findByClientTelegramId(userId)
-                    .stream()
-                    .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS)
-                    .collect(Collectors.toList());
-
-            if (!activeElders.isEmpty()) {
-                // Берём первую заявку в работе
-                Elder elder = activeElders.get(0);
-
-
-
-
-
-                // Проверяем, есть ли у заявки оператор
-                if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
-                    String[] ids = elder.getAssignedOperatorIds().split(",");
-                    String operatorIdStr = ids[0]; // Берём первого оператора
-
-                    try {
-                        Long operatorId = Long.parseLong(operatorIdStr.trim());
-                        User operator = userService.findByTelegramId(operatorId).orElse(null);
-
-                        if (operator != null && operator.getChatId() != null) {
-                            // Пересылаем ответ оператору
-                            UniversalResponse forward = new UniversalResponse(
-                                    "📩 **Новое сообщение от клиента!**\n\n" +
-                                            "📋 **По заявке #" + elder.getId() + "**\n" +
-                                            "👤 **Клиент:** " + (user.getFirstName() != null ? user.getFirstName() : "Клиент") + "\n\n" +
-                                            "💬 **Сообщение:**\n" +
-                                            text + "\n\n" +
-                                            "📌 Ответьте клиенту через кнопку 'Связаться через MAX'."
-                            );
-                            forward.addButtonFullRow("📋 Мои заявки", "my_requests");
-                            forward.addButtonFullRow("🏠 Главное меню", "main_menu");
-
-                            messageSender.sendMessage(operator.getChatId(), forward);
-
-                            // Подтверждение клиенту
-                            UniversalResponse clientResponse = new UniversalResponse(
-                                    "✅ **Ваше сообщение отправлено оператору!**\n\n" +
-                                            "📩 Оператор получит ваше сообщение и свяжется с вами."
-                            );
-                            clientResponse.addButtonFullRow("👤 Моя заявка", "my_request");
-                            clientResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
-
-                            return clientResponse;
-                        }
-                    } catch (NumberFormatException e) {
-                        log.error("❌ Ошибка парсинга operatorId: {}", e.getMessage());
-                    }
-                }
-            }
-        }
-
-        // ===== ОБРАБОТКА КНОПОК =====
-        if (callbackData != null) {
-            return handleCallback(userId, chatId, callbackData);
         }
 
         // ===== ОБРАБОТКА ДИАЛОГА (АНКЕТА) =====
