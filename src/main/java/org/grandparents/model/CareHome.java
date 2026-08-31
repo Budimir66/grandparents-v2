@@ -36,7 +36,7 @@ public class CareHome {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "specialization")
+    @Column(name = "specialization", columnDefinition = "TEXT")
     private String specialization;
 
     @Column(name = "rating")
