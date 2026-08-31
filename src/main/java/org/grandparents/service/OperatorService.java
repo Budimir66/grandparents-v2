@@ -5,6 +5,7 @@ import org.grandparents.model.*;
 import org.grandparents.repository.OperatorReactionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +35,7 @@ public class OperatorService {
                            BonusSettingService bonusSettingService,
                            OperatorReactionRepository reactionRepository,
                            MessageSender messageSender,
-                           BotService botService) {
+                           @Lazy BotService botService) {
         this.userService = userService;
         this.elderService = elderService;
         this.careHomeService = careHomeService;
