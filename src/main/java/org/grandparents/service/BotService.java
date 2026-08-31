@@ -214,15 +214,15 @@ public class BotService {
 // =============================================================
 // ===== ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ОТ ОПЕРАТОРОВ =====
 // =============================================================
+        // =============================================================
+// ===== ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ОТ ОПЕРАТОРОВ =====
+// =============================================================
         if (text != null && !text.isEmpty() && !text.startsWith("/") && callbackData == null) {
-            // Проверяем, является ли пользователь оператором или менеджером
             if (user.getAccessLevel() == AccessLevel.OPERATOR ||
                     user.getAccessLevel() == AccessLevel.MANAGER) {
 
                 log.info("📝 Оператор {} прислал сообщение: {}", userId, text);
 
-                // Ищем активную заявку в работе у этого оператора
-                // Проверяем через assigned_operator_ids (новая логика)
                 List<Elder> activeElders = elderService.findActiveElders()
                         .stream()
                         .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS)
@@ -243,11 +243,11 @@ public class BotService {
                     Elder elder = activeElders.get(0);
                     log.info("📋 Найдена активная заявка #{} для оператора {}", elder.getId(), userId);
 
-                    // Проверяем, есть ли у заявки клиент
                     if (elder.getClientTelegramId() != null) {
                         User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
+
+                        // ===== ЕСЛИ У КЛИЕНТА ЕСТЬ CHAT_ID — ОТПРАВЛЯЕМ СООБЩЕНИЕ =====
                         if (client != null && client.getChatId() != null) {
-                            // Отправляем сообщение клиенту
                             UniversalResponse forward = new UniversalResponse(
                                     "📩 **Новое сообщение от оператора!**\n\n" +
                                             "👤 **Оператор:** " + user.getFirstName() + "\n" +
@@ -261,7 +261,6 @@ public class BotService {
                             messageSender.sendMessage(client.getChatId(), forward);
                             log.info("📨 Сообщение отправлено клиенту {}", client.getTelegramId());
 
-                            // Ответ оператору
                             UniversalResponse response = new UniversalResponse(
                                     "✅ **Сообщение отправлено клиенту!**\n\n" +
                                             "📩 Ваше сообщение доставлено.\n" +
@@ -271,8 +270,23 @@ public class BotService {
                             response.addButtonFullRow("📋 Мои заявки", "my_requests");
                             response.addButtonFullRow("🏠 Главное меню", "main_menu");
                             return response;
+
                         } else {
-                            log.warn("⚠️ Клиент {} не имеет chat_id", elder.getClientTelegramId());
+                            // ===== ЕСЛИ У КЛИЕНТА НЕТ CHAT_ID — ПОКАЗЫВАЕМ ТЕЛЕФОН =====
+                            String phone = elder.getClientPhone() != null ? elder.getClientPhone() : "не указан";
+                            String name = elder.getClientFirstName() != null ? elder.getClientFirstName() : "Клиент";
+
+                            UniversalResponse response = new UniversalResponse(
+                                    "⚠️ **Не удалось отправить сообщение через MAX.**\n\n" +
+                                            "📞 **Контакты клиента:**\n" +
+                                            "👤 Имя: " + name + "\n" +
+                                            "📱 Телефон: " + phone + "\n\n" +
+                                            "📌 Позвоните клиенту для связи.\n\n" +
+                                            "💬 Ваше сообщение:\n" + text
+                            );
+                            response.addButtonFullRow("📋 Мои заявки", "my_requests");
+                            response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                            return response;
                         }
                     } else {
                         log.warn("⚠️ У заявки #{} нет клиента", elder.getId());
