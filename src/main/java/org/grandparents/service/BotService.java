@@ -7,6 +7,7 @@ import org.grandparents.model.*;
 import org.grandparents.repository.BonusTransactionRepository;
 import org.grandparents.repository.ComplaintRepository;
 import org.grandparents.repository.OperatorReactionRepository;
+
 import org.grandparents.repository.RatingRepository;
 import org.grandparents.statemachine.DialogState;
 import org.slf4j.Logger;
@@ -240,14 +241,9 @@ public class BotService {
                             forward.addButtonFullRow("📋 Посмотреть заявку", "view_elder_" + elder.getId());
                             forward.addButtonFullRow("🏠 Главное меню", "main_menu");
 
-                            messageSender.sendMessage(recipient.getChatId(), forward);
-
-                            log.info("📨 [MESSAGE] Сообщение отправлено пользователю {}", recipientId);
-
-                            // Запоминаем, что получатель теперь ведёт чат по этой заявке
-                            stateService.setActiveChatElder(recipientId, elder.getId());
-                            log.info("🔗 [ACTIVE_CHAT] Установлен активный чат для userId={} на заявку {}", recipientId, elder.getId());
-
+                            // ===== ОТПРАВЛЯЕМ ЧЕРЕЗ УНИВЕРСАЛЬНЫЙ МЕТОД =====
+// Извлекаем кнопки из forward
+                            this.sendMessageWithActiveChat(recipientId, elder.getId(), forward);
                             UniversalResponse response = new UniversalResponse(
                                     "✅ **Сообщение отправлено!**\n\n" +
                                             "📩 Получатель: " + recipientName + "\n" +
@@ -4884,5 +4880,40 @@ public class BotService {
         response.addButtonFullRow("✅ Да, удалить", "confirm_delete_completed_yes");
         response.addButtonFullRow("❌ Отменить", "confirm_delete_completed_no");
         return response;
+    }
+    /**
+     * Универсальный метод отправки сообщения с автоматической установкой активного чата
+     *
+     * @param recipientUserId ID получателя (telegram_id)
+     * @param elderId ID заявки, к которой относится сообщение
+     * @param message Текст сообщения
+     * @param buttons Список кнопок (может быть null)
+     */
+    /**
+     * Универсальный метод отправки сообщения с автоматической установкой активного чата
+     */
+    public void sendMessageWithActiveChat(Long recipientUserId, Long elderId, UniversalResponse response) {
+        // 1. Получаем получателя
+        User recipient = userService.findByTelegramId(recipientUserId).orElse(null);
+        if (recipient == null) {
+            log.warn("⚠️ [sendMessageWithActiveChat] Получатель {} не найден", recipientUserId);
+            return;
+        }
+
+        // 2. Проверяем наличие chat_id
+        if (recipient.getChatId() == null) {
+            log.warn("⚠️ [sendMessageWithActiveChat] У получателя {} нет chat_id", recipientUserId);
+            return;
+        }
+
+        // 3. Отправляем готовое сообщение
+        messageSender.sendMessage(recipient.getChatId(), response);
+        log.info("📨 [sendMessageWithActiveChat] Сообщение отправлено пользователю {}", recipientUserId);
+
+        // 4. Устанавливаем активный чат
+        if (elderId != null) {
+            stateService.setActiveChatElder(recipientUserId, elderId);
+            log.info("🔗 [sendMessageWithActiveChat] Установлен активный чат для userId={} на заявку {}", recipientUserId, elderId);
+        }
     }
 }

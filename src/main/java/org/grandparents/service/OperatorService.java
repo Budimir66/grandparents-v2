@@ -9,8 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+
 
 @Service
 public class OperatorService {
@@ -22,6 +25,7 @@ public class OperatorService {
     private final BonusSettingService bonusSettingService;
     private final OperatorReactionRepository reactionRepository;
     private final MessageSender messageSender;
+    private final BotService botService;
 
 
     public OperatorService(UserService userService,
@@ -29,13 +33,15 @@ public class OperatorService {
                            CareHomeService careHomeService,
                            BonusSettingService bonusSettingService,
                            OperatorReactionRepository reactionRepository,
-                           MessageSender messageSender) {
+                           MessageSender messageSender,
+                           BotService botService) {
         this.userService = userService;
         this.elderService = elderService;
         this.careHomeService = careHomeService;
         this.bonusSettingService = bonusSettingService;
         this.reactionRepository = reactionRepository;
         this.messageSender = messageSender;
+        this.botService = botService;
     }
 
     // ============================================================
@@ -509,13 +515,9 @@ public class OperatorService {
 
         // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЗЯЛ ЭТУ ЗАЯВКУ =====
         boolean isAssigned = false;
-
-        // Проверяем assignedOperatorId
         if (elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId)) {
             isAssigned = true;
         }
-
-        // Если не нашли, проверяем assignedOperatorIds (строка с ID через запятую)
         if (!isAssigned && elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
             String[] ids = elder.getAssignedOperatorIds().split(",");
             for (String id : ids) {
@@ -525,19 +527,19 @@ public class OperatorService {
                 }
             }
         }
-
         if (!isAssigned) {
             return responseWithMainMenu("❌ Вы не можете связаться с клиентом по этой заявке.");
         }
 
+        // ===== ПОЛУЧАЕМ ОПЕРАТОРА =====
         User operator = getUserOrNull(userId);
         if (operator == null) {
             return responseWithMainMenu("❌ Оператор не найден.");
         }
 
-        // Сохраняем, кто написал клиенту
-        elder.setLastOperatorId(userId);  // ← userId уже Long
-        elderService.updateElder(elder);
+        // ===== ОБЪЯВЛЯЕМ ПЕРЕМЕННЫЕ (ЭТО БЫЛО ПРОПУЩЕНО!) =====
+        String operatorName = operator.getFirstName() != null ? operator.getFirstName() : "Оператор";
+        String operatorPhone = operator.getPhone() != null ? operator.getPhone() : "не указан";
 
         // ===== ПОЛУЧАЕМ НАЗВАНИЕ ПАНСИОНАТА =====
         String careHomeName = "Пансионат (не указан)";
@@ -551,15 +553,7 @@ public class OperatorService {
             }
         }
 
-        Long clientId = elder.getClientTelegramId();
-        User client = getUserOrNull(clientId);
-
         // ===== ФОРМИРУЕМ СООБЩЕНИЕ ДЛЯ КЛИЕНТА =====
-        String operatorName = operator.getFirstName() != null ? operator.getFirstName() : "Оператор";
-        String operatorPhone = operator.getPhone() != null ? operator.getPhone() : "не указан";
-
-        log.info("📞 Оператор {}: careHomeId={}, phone={}", operatorName, operator.getCareHomeId(), operator.getPhone());
-
         String clientMessage = "📱 **Вам сообщение от пансионата!**\n\n" +
                 "🏢 **" + careHomeName + "**\n" +
                 "Оператор **" + operatorName + "** хочет связаться с вами\n" +
@@ -574,18 +568,20 @@ public class OperatorService {
                 "или написать ему в MAX.\n\n" +
                 "📋 Для просмотра заявки нажмите кнопку ниже.";
 
+        // ===== СОЗДАЁМ ОТВЕТ С КНОПКАМИ =====
         UniversalResponse clientResponse = new UniversalResponse(clientMessage);
         clientResponse.addButtonFullRow("👤 Моя заявка", "my_request");
         clientResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
 
+        // ===== ПОЛУЧАЕМ КЛИЕНТА =====
+        Long clientId = elder.getClientTelegramId();
+        User client = getUserOrNull(clientId);
+
         // ===== ОТПРАВЛЯЕМ КЛИЕНТУ =====
         boolean sentToClient = false;
-        String clientPhone = elder.getClientPhone() != null ? elder.getClientPhone() : "не указан";
-        String clientName = elder.getClientFirstName() != null ? elder.getClientFirstName() : "Клиент";
-
         if (client != null && client.getChatId() != null) {
             try {
-                messageSender.sendMessage(client.getChatId(), clientResponse);
+                botService.sendMessageWithActiveChat(clientId, elder.getId(), clientResponse);
                 sentToClient = true;
                 log.info("📨 Сообщение отправлено клиенту {}", clientId);
             } catch (Exception e) {
@@ -596,6 +592,9 @@ public class OperatorService {
         }
 
         // ===== ОТВЕТ ОПЕРАТОРУ =====
+        String clientPhone = elder.getClientPhone() != null ? elder.getClientPhone() : "не указан";
+        String clientName = elder.getClientFirstName() != null ? elder.getClientFirstName() : "Клиент";
+
         String operatorResponse;
         if (sentToClient) {
             operatorResponse = "✅ **Сообщение отправлено клиенту!**\n\n" +
@@ -728,7 +727,7 @@ public class OperatorService {
             return responseWithMainMenu("❌ Заявка не найдена.");
         }
 
-        // Проверяем, что оператор взял заявку
+        // ===== ПРОВЕРЯЕМ, ЧТО ОПЕРАТОР ВЗЯЛ ЗАЯВКУ =====
         boolean isAssigned = false;
         if (elder.getAssignedOperatorId() != null && elder.getAssignedOperatorId().equals(userId)) {
             isAssigned = true;
@@ -746,15 +745,15 @@ public class OperatorService {
             return responseWithMainMenu("❌ Вы не можете связаться с клиентом по этой заявке.");
         }
 
+        // ===== ПОЛУЧАЕМ ОПЕРАТОРА =====
         User operator = getUserOrNull(userId);
         if (operator == null) {
             return responseWithMainMenu("❌ Оператор не найден.");
         }
 
-        Long clientId = elder.getClientTelegramId();
-        User client = getUserOrNull(clientId);
+        // ===== ОБЪЯВЛЯЕМ ПЕРЕМЕННЫЕ (В ПРАВИЛЬНОМ ПОРЯДКЕ!) =====
+        String operatorName = operator.getFirstName() != null ? operator.getFirstName() : "Оператор";
 
-        // Формируем сообщение клиенту
         String careHomeName = "Пансионат (не указан)";
         if (operator.getCareHomeId() != null) {
             CareHome careHome = careHomeService.findById(operator.getCareHomeId());
@@ -763,9 +762,10 @@ public class OperatorService {
             }
         }
 
+        // ===== ФОРМИРУЕМ СООБЩЕНИЕ КЛИЕНТУ =====
         String clientMessage = "📩 **Сообщение от оператора пансионата!**\n\n" +
                 "🏢 **" + careHomeName + "**\n" +
-                "👤 **Оператор:** " + operator.getFirstName() + "\n" +
+                "👤 **Оператор:** " + operatorName + "\n" +
                 "📋 **По заявке #" + elderId + "**\n\n" +
                 "━━━━━━━━━━━━━━━━━━━━━━━\n" +
                 "💬 **Сообщение:**\n" +
@@ -773,15 +773,20 @@ public class OperatorService {
                 "━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
                 "📌 Вы можете ответить на это сообщение прямо сейчас.";
 
+        // ===== СОЗДАЁМ ОТВЕТ С КНОПКАМИ =====
         UniversalResponse clientResponse = new UniversalResponse(clientMessage);
         clientResponse.addButtonFullRow("👤 Моя заявка", "my_request");
         clientResponse.addButtonFullRow("🏠 Главное меню", "main_menu");
 
-        // Отправляем клиенту
+        // ===== ПОЛУЧАЕМ КЛИЕНТА =====
+        Long clientId = elder.getClientTelegramId();
+        User client = getUserOrNull(clientId);
+
+        // ===== ОТПРАВЛЯЕМ КЛИЕНТУ =====
         boolean sentToClient = false;
         if (client != null && client.getChatId() != null) {
             try {
-                messageSender.sendMessage(client.getChatId(), clientResponse);
+                botService.sendMessageWithActiveChat(clientId, elder.getId(), clientResponse);
                 sentToClient = true;
                 log.info("📨 Пользовательское сообщение отправлено клиенту {}", clientId);
             } catch (Exception e) {
@@ -789,7 +794,7 @@ public class OperatorService {
             }
         }
 
-        // Ответ оператору
+        // ===== ОТВЕТ ОПЕРАТОРУ =====
         String responseText;
         if (sentToClient) {
             responseText = "✅ **Ваше сообщение отправлено клиенту!**\n\n" +
