@@ -103,35 +103,21 @@ public class BotService {
         Long userId = Long.parseLong(message.getUserId());
         String chatId = message.getChatId();
 
-        // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
-        // Проверяем только если пользователь НЕ зарегистрирован (GUEST)
-        if (text != null && !text.isEmpty() && !text.startsWith("/")) {
-            User user = userService.findByTelegramId(userId).orElse(null);
 
-            // Если пользователь уже оператор, менеджер или админ — пропускаем проверку
-            if (user == null || user.getAccessLevel() == AccessLevel.GUEST) {
-                // Ищем приглашение по токену
-                String cleanText = text.replaceAll("\\s+\\d+$", "").trim();
-                CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
-                if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
-                    return handleAcceptInvitation(userId, careHome.getId());
-                }
-            }
-        }
 
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ПОЛЬЗОВАТЕЛЬ АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
         if (text != null && !text.isEmpty() && !text.startsWith("/")) {
             User user = userService.findByTelegramId(userId).orElse(null);
 
-            // Проверяем только если пользователь НЕ зарегистрирован (GUEST)
-            if (user == null || user.getAccessLevel() == AccessLevel.GUEST) {
-                // ===== ТОКЕН ДОЛЖЕН ИМЕТЬ ФОРМАТ: "НАЗВАНИЕ + ПРОБЕЛ + 4 ЦИФРЫ" =====
-                // Например: "Золотая осень 1234"
+            // ===== ЕСЛИ ПОЛЬЗОВАТЕЛЬ УЖЕ ЗАРЕГИСТРИРОВАН (НЕ GUEST) — ПРОПУСКАЕМ =====
+            if (user != null && user.getAccessLevel() != AccessLevel.GUEST) {
+                // Пользователь уже оператор/менеджер/админ — проверку токена НЕ делаем
+                // Ничего не делаем, просто пропускаем
+            } else {
+                // ===== ТОЛЬКО ДЛЯ НЕЗАРЕГИСТРИРОВАННЫХ ПОЛЬЗОВАТЕЛЕЙ (GUEST) =====
+                // Проверяем формат токена: "НАЗВАНИЕ + ПРОБЕЛ + 4 ЦИФРЫ"
                 String trimmed = text.trim();
-
-                // Проверяем, что текст заканчивается на пробел + 4 цифры
                 if (trimmed.matches(".*\\s\\d{4}$")) {
-                    // Убираем последние 4 цифры и пробел
                     String cleanText = trimmed.replaceAll("\\s+\\d{4}$", "").trim();
                     CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
                     if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
@@ -164,7 +150,56 @@ public class BotService {
         if (isNewUser || "/start".equalsIgnoreCase(text)) {
             return handleStartCommand(userId, chatId);
         }
+// ===== ПРОВЕРКА: ЯВЛЯЕТСЯ ЛИ СООБЩЕНИЕ ОТВЕТОМ КЛИЕНТУ =====
+        if (text != null && !text.isEmpty() && !text.startsWith("/") && callbackData == null) {
+             user = userService.findByTelegramId(userId).orElse(null);
 
+            // Если пользователь — оператор или менеджер
+            if (user != null && (user.getAccessLevel() == AccessLevel.OPERATOR ||
+                    user.getAccessLevel() == AccessLevel.MANAGER)) {
+
+                // Ищем активную заявку, где этот оператор назначен
+                List<Elder> activeElders = elderService.findByAssignedOperatorId(userId)
+                        .stream()
+                        .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS)
+                        .collect(Collectors.toList());
+
+                if (!activeElders.isEmpty()) {
+                    // Берём первую активную заявку
+                    Elder elder = activeElders.get(0);
+
+                    // Проверяем, есть ли у заявки клиент
+                    if (elder.getClientTelegramId() != null) {
+                        User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
+                        if (client != null && client.getChatId() != null) {
+                            // Отправляем сообщение клиенту
+                            UniversalResponse forward = new UniversalResponse(
+                                    "📩 **Новое сообщение от оператора!**\n\n" +
+                                            "👤 **Оператор:** " + user.getFirstName() + "\n" +
+                                            "📋 **По заявке #" + elder.getId() + "**\n\n" +
+                                            "💬 **Сообщение:**\n" + text + "\n\n" +
+                                            "📌 Вы можете ответить на это сообщение."
+                            );
+                            forward.addButtonFullRow("👤 Моя заявка", "my_request");
+                            forward.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                            messageSender.sendMessage(client.getChatId(), forward);
+
+                            // Ответ оператору
+                            UniversalResponse response = new UniversalResponse(
+                                    "✅ **Сообщение отправлено клиенту!**\n\n" +
+                                            "📩 Ваше сообщение доставлено.\n" +
+                                            "📋 **Заявка #" + elder.getId() + "**\n\n" +
+                                            "Ожидайте ответа."
+                            );
+                            response.addButtonFullRow("📋 Мои заявки", "my_requests");
+                            response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                            return response;
+                        }
+                    }
+                }
+            }
+        }
         // В методе handleMessage, после создания пользователя
         if (text != null && !text.startsWith("/") && callbackData == null) {
             // Проверяем, есть ли у клиента заявка в работе
@@ -176,6 +211,10 @@ public class BotService {
             if (!activeElders.isEmpty()) {
                 // Берём первую заявку в работе
                 Elder elder = activeElders.get(0);
+
+
+
+
 
                 // Проверяем, есть ли у заявки оператор
                 if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
