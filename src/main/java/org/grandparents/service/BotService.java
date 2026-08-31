@@ -211,7 +211,77 @@ public class BotService {
                 }
             }
         }
+// =============================================================
+// ===== ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ОТ ОПЕРАТОРОВ =====
+// =============================================================
+        if (text != null && !text.isEmpty() && !text.startsWith("/") && callbackData == null) {
+            // Проверяем, является ли пользователь оператором или менеджером
+            if (user.getAccessLevel() == AccessLevel.OPERATOR ||
+                    user.getAccessLevel() == AccessLevel.MANAGER) {
 
+                log.info("📝 Оператор {} прислал сообщение: {}", userId, text);
+
+                // Ищем активную заявку в работе у этого оператора
+                // Проверяем через assigned_operator_ids (новая логика)
+                List<Elder> activeElders = elderService.findActiveElders()
+                        .stream()
+                        .filter(e -> e.getStatus() == ElderStatus.IN_PROGRESS)
+                        .filter(e -> {
+                            if (e.getAssignedOperatorIds() != null && !e.getAssignedOperatorIds().isEmpty()) {
+                                String[] ids = e.getAssignedOperatorIds().split(",");
+                                for (String id : ids) {
+                                    if (id.trim().equals(String.valueOf(userId))) {
+                                        return true;
+                                    }
+                                }
+                            }
+                            return false;
+                        })
+                        .collect(Collectors.toList());
+
+                if (!activeElders.isEmpty()) {
+                    Elder elder = activeElders.get(0);
+                    log.info("📋 Найдена активная заявка #{} для оператора {}", elder.getId(), userId);
+
+                    // Проверяем, есть ли у заявки клиент
+                    if (elder.getClientTelegramId() != null) {
+                        User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
+                        if (client != null && client.getChatId() != null) {
+                            // Отправляем сообщение клиенту
+                            UniversalResponse forward = new UniversalResponse(
+                                    "📩 **Новое сообщение от оператора!**\n\n" +
+                                            "👤 **Оператор:** " + user.getFirstName() + "\n" +
+                                            "📋 **По заявке #" + elder.getId() + "**\n\n" +
+                                            "💬 **Сообщение:**\n" + text + "\n\n" +
+                                            "📌 Вы можете ответить на это сообщение."
+                            );
+                            forward.addButtonFullRow("👤 Моя заявка", "my_request");
+                            forward.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                            messageSender.sendMessage(client.getChatId(), forward);
+                            log.info("📨 Сообщение отправлено клиенту {}", client.getTelegramId());
+
+                            // Ответ оператору
+                            UniversalResponse response = new UniversalResponse(
+                                    "✅ **Сообщение отправлено клиенту!**\n\n" +
+                                            "📩 Ваше сообщение доставлено.\n" +
+                                            "📋 **Заявка #" + elder.getId() + "**\n\n" +
+                                            "Ожидайте ответа."
+                            );
+                            response.addButtonFullRow("📋 Мои заявки", "my_requests");
+                            response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                            return response;
+                        } else {
+                            log.warn("⚠️ Клиент {} не имеет chat_id", elder.getClientTelegramId());
+                        }
+                    } else {
+                        log.warn("⚠️ У заявки #{} нет клиента", elder.getId());
+                    }
+                } else {
+                    log.info("ℹ️ У оператора {} нет активных заявок в работе", userId);
+                }
+            }
+        }
         // ===== ОБРАБОТКА ДИАЛОГА (АНКЕТА) =====
         DialogState state = stateService.getState(userId);
         if (state != DialogState.START) {
