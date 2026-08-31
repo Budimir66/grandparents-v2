@@ -302,21 +302,22 @@ public class UserStateService {
         if (value == null) return null;
         return type.cast(value);
     }
-    // В UserStateService.java
     private final Map<Long, Long> activeChatElder = new ConcurrentHashMap<>();
 
     public void setActiveChatElder(Long userId, Long elderId) {
         activeChatElder.put(userId, elderId);
-        log.info("🔗 Активный чат для {} установлен на заявку {}", userId, elderId);
+        log.info("🔗 [ACTIVE_CHAT] Установлен активный чат для userId={} на заявку elderId={}", userId, elderId);
     }
 
     public Long getActiveChatElder(Long userId) {
-        return activeChatElder.get(userId);
+        Long elderId = activeChatElder.get(userId);
+        log.info("🔍 [ACTIVE_CHAT] Получен активный чат для userId={}: elderId={}", userId, elderId);
+        return elderId;
     }
 
     public void clearActiveChatElder(Long userId) {
-        activeChatElder.remove(userId);
-        log.info("🔗 Активный чат для {} очищен", userId);
+        Long elderId = activeChatElder.remove(userId);
+        log.info("🧹 [ACTIVE_CHAT] Очищен активный чат для userId={}, был elderId={}", userId, elderId);
     }
 
 }
