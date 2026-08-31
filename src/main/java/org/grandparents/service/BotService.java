@@ -119,6 +119,28 @@ public class BotService {
             }
         }
 
+        // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ПОЛЬЗОВАТЕЛЬ АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
+        if (text != null && !text.isEmpty() && !text.startsWith("/")) {
+            User user = userService.findByTelegramId(userId).orElse(null);
+
+            // Проверяем только если пользователь НЕ зарегистрирован (GUEST)
+            if (user == null || user.getAccessLevel() == AccessLevel.GUEST) {
+                // ===== ТОКЕН ДОЛЖЕН ИМЕТЬ ФОРМАТ: "НАЗВАНИЕ + ПРОБЕЛ + 4 ЦИФРЫ" =====
+                // Например: "Золотая осень 1234"
+                String trimmed = text.trim();
+
+                // Проверяем, что текст заканчивается на пробел + 4 цифры
+                if (trimmed.matches(".*\\s\\d{4}$")) {
+                    // Убираем последние 4 цифры и пробел
+                    String cleanText = trimmed.replaceAll("\\s+\\d{4}$", "").trim();
+                    CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
+                    if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
+                        return handleAcceptInvitation(userId, careHome.getId());
+                    }
+                }
+            }
+        }
+
         // ===== СОЗДАЁМ ПОЛЬЗОВАТЕЛЯ, ЕСЛИ ЕГО НЕТ =====
         User user = userService.findByTelegramId(userId).orElse(null);
         boolean isNewUser = false;
