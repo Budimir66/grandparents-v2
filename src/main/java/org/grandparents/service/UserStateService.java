@@ -302,6 +302,19 @@ public class UserStateService {
         if (value == null) return null;
         return type.cast(value);
     }
+    // В UserStateService.java
+    private final Map<Long, Long> activeChatElder = new ConcurrentHashMap<>();
 
+    public void setActiveChatElder(Long userId, Long elderId) {
+        activeChatElder.put(userId, elderId);
+    }
+
+    public Long getActiveChatElder(Long userId) {
+        return activeChatElder.get(userId);
+    }
+
+    public void clearActiveChatElder(Long userId) {
+        activeChatElder.remove(userId);
+    }
 
 }
