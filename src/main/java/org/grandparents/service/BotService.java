@@ -104,15 +104,18 @@ public class BotService {
         String chatId = message.getChatId();
 
         // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
-        // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ОПЕРАТОР АКТИВИРОВАТЬ ПРИГЛАШЕНИЕ =====
+        // Проверяем только если пользователь НЕ зарегистрирован (GUEST)
         if (text != null && !text.isEmpty() && !text.startsWith("/")) {
-            // Ищем приглашение по токену
-            // Токен = название пансионата + 4 цифры
-            // Убираем цифры, оставляем название для поиска пансионата
-            String cleanText = text.replaceAll("\\s+\\d+$", "").trim();
-            CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
-            if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
-                return handleAcceptInvitation(userId, careHome.getId());
+            User user = userService.findByTelegramId(userId).orElse(null);
+
+            // Если пользователь уже оператор, менеджер или админ — пропускаем проверку
+            if (user == null || user.getAccessLevel() == AccessLevel.GUEST) {
+                // Ищем приглашение по токену
+                String cleanText = text.replaceAll("\\s+\\d+$", "").trim();
+                CareHome careHome = careHomeService.findByNameIgnoreCase(cleanText);
+                if (careHome != null && invitationService.hasActiveInvitation(careHome.getId())) {
+                    return handleAcceptInvitation(userId, careHome.getId());
+                }
             }
         }
 
