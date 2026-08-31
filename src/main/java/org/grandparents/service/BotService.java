@@ -163,69 +163,84 @@ public class BotService {
                 if (activeElderId != null) {
                     Elder elder = elderService.findById(activeElderId);
                     if (elder != null && elder.getStatus() == ElderStatus.IN_PROGRESS) {
-                        log.info("📋 Отправка по активной заявке #{}", activeElderId);
-
-                        // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ (АВТОР ЗАЯВКИ) =====
-                        Long recipientId = null;
-                        String recipientName = "Автор";
-
-                        if (elder.getCreatedBy() != null) {
-                            User author = userService.findById(elder.getCreatedBy());
-                            if (author != null && author.getChatId() != null) {
-                                recipientId = author.getTelegramId();
-                                recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
+                        // Проверяем, что оператор назначен на эту заявку
+                        boolean isAssigned = false;
+                        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
+                            String[] ids = elder.getAssignedOperatorIds().split(",");
+                            for (String id : ids) {
+                                if (id.trim().equals(String.valueOf(userId))) {
+                                    isAssigned = true;
+                                    break;
+                                }
                             }
                         }
 
-                        if (recipientId == null && elder.getClientTelegramId() != null) {
-                            User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
-                            if (client != null && client.getChatId() != null) {
-                                recipientId = client.getTelegramId();
-                                recipientName = client.getFirstName() != null ? client.getFirstName() : "Клиент";
+                        if (isAssigned) {
+                            log.info("📋 Отправка по активной заявке #{}", activeElderId);
+
+                            // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
+                            Long recipientId = null;
+                            String recipientName = "Автор";
+
+                            if (elder.getCreatedBy() != null) {
+                                User author = userService.findById(elder.getCreatedBy());
+                                if (author != null && author.getChatId() != null) {
+                                    recipientId = author.getTelegramId();
+                                    recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
+                                }
                             }
-                        }
 
-                        if (recipientId != null) {
-                            User recipient = userService.findByTelegramId(recipientId).orElse(null);
-                            if (recipient != null && recipient.getChatId() != null) {
-                                UniversalResponse forward = new UniversalResponse(
-                                        "📩 **Новое сообщение по заявке #" + elder.getId() + "!**\n\n" +
-                                                "👤 **Отправитель:** " + user.getFirstName() + "\n" +
-                                                "📋 **Заявка #" + elder.getId() + "**\n" +
-                                                "👤 **Подопечный:** " + elder.getFullName() + "\n\n" +
-                                                "💬 **Сообщение:**\n" + text
-                                );
-                                forward.addButtonFullRow("📋 Посмотреть заявку", "view_elder_" + elder.getId());
-                                forward.addButtonFullRow("🏠 Главное меню", "main_menu");
-
-                                messageSender.sendMessage(recipient.getChatId(), forward);
-                                log.info("📨 Сообщение отправлено пользователю {}", recipientId);
-
-                                UniversalResponse response = new UniversalResponse(
-                                        "✅ **Сообщение отправлено!**\n\n" +
-                                                "📩 Получатель: " + recipientName + "\n" +
-                                                "📋 **Заявка #" + elder.getId() + "**"
-                                );
-                                response.addButtonFullRow("📋 Мои заявки", "my_requests");
-                                response.addButtonFullRow("🏠 Главное меню", "main_menu");
-                                return response;
+                            if (recipientId == null && elder.getClientTelegramId() != null) {
+                                User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
+                                if (client != null && client.getChatId() != null) {
+                                    recipientId = client.getTelegramId();
+                                    recipientName = client.getFirstName() != null ? client.getFirstName() : "Клиент";
+                                }
                             }
-                        }
 
-                        // Если не удалось отправить — показываем телефон
-                        String phone = elder.getClientPhone() != null ? elder.getClientPhone() : "не указан";
-                        UniversalResponse response = new UniversalResponse(
-                                "⚠️ **Не удалось отправить сообщение через MAX.**\n\n" +
-                                        "📞 **Телефон:** " + phone + "\n\n" +
-                                        "📌 Позвоните для связи."
-                        );
-                        response.addButtonFullRow("📋 Мои заявки", "my_requests");
-                        response.addButtonFullRow("🏠 Главное меню", "main_menu");
-                        return response;
+                            if (recipientId != null) {
+                                User recipient = userService.findByTelegramId(recipientId).orElse(null);
+                                if (recipient != null && recipient.getChatId() != null) {
+                                    UniversalResponse forward = new UniversalResponse(
+                                            "📩 **Новое сообщение по заявке #" + elder.getId() + "!**\n\n" +
+                                                    "👤 **Отправитель:** " + user.getFirstName() + "\n" +
+                                                    "📋 **Заявка #" + elder.getId() + "**\n" +
+                                                    "👤 **Подопечный:** " + elder.getFullName() + "\n\n" +
+                                                    "💬 **Сообщение:**\n" + text
+                                    );
+                                    forward.addButtonFullRow("📋 Посмотреть заявку", "view_elder_" + elder.getId());
+                                    forward.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                                    messageSender.sendMessage(recipient.getChatId(), forward);
+                                    log.info("📨 Сообщение отправлено пользователю {}", recipientId);
+
+                                    // ===== СОЗДАЁМ response ЗДЕСЬ =====
+                                    UniversalResponse response = new UniversalResponse(
+                                            "✅ **Сообщение отправлено!**\n\n" +
+                                                    "📩 Получатель: " + recipientName + "\n" +
+                                                    "📋 **Заявка #" + elder.getId() + "**"
+                                    );
+                                    response.addButtonFullRow("📋 Мои заявки", "my_requests");
+                                    response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                                    return response;
+                                }
+                            }
+
+                            // Если не удалось отправить — показываем телефон
+                            String phone = elder.getClientPhone() != null ? elder.getClientPhone() : "не указан";
+                            UniversalResponse response = new UniversalResponse(
+                                    "⚠️ **Не удалось отправить сообщение через MAX.**\n\n" +
+                                            "📞 **Телефон:** " + phone + "\n\n" +
+                                            "📌 Позвоните для связи."
+                            );
+                            response.addButtonFullRow("📋 Мои заявки", "my_requests");
+                            response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                            return response;
+                        } else {
+                            stateService.clearActiveChatElder(userId);
+                        }
                     } else {
-                        // Заявка уже не активна — очищаем состояние
                         stateService.clearActiveChatElder(userId);
-                        log.info("ℹ️ Активная заявка {} уже неактивна, очищаем состояние", activeElderId);
                     }
                 }
 

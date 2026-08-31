@@ -307,6 +307,7 @@ public class UserStateService {
 
     public void setActiveChatElder(Long userId, Long elderId) {
         activeChatElder.put(userId, elderId);
+        log.info("🔗 Активный чат для {} установлен на заявку {}", userId, elderId);
     }
 
     public Long getActiveChatElder(Long userId) {
@@ -315,6 +316,7 @@ public class UserStateService {
 
     public void clearActiveChatElder(Long userId) {
         activeChatElder.remove(userId);
+        log.info("🔗 Активный чат для {} очищен", userId);
     }
 
 }
