@@ -26,7 +26,7 @@ public class OperatorService {
     private final BonusSettingService bonusSettingService;
     private final OperatorReactionRepository reactionRepository;
     private final MessageSender messageSender;
-    private final BotService botService;
+    private final MessageService messageService;
 
 
     public OperatorService(UserService userService,
@@ -35,14 +35,15 @@ public class OperatorService {
                            BonusSettingService bonusSettingService,
                            OperatorReactionRepository reactionRepository,
                            MessageSender messageSender,
-                           @Lazy BotService botService) {
+                           MessageService messageService) {
         this.userService = userService;
         this.elderService = elderService;
         this.careHomeService = careHomeService;
         this.bonusSettingService = bonusSettingService;
         this.reactionRepository = reactionRepository;
         this.messageSender = messageSender;
-        this.botService = botService;
+        this.messageService = messageService;
+
     }
 
     // ============================================================
@@ -582,7 +583,7 @@ public class OperatorService {
         boolean sentToClient = false;
         if (client != null && client.getChatId() != null) {
             try {
-                botService.sendMessageWithActiveChat(clientId, elder.getId(), clientResponse);
+                messageService.sendWithActiveChat(clientId, elder.getId(), clientResponse);
                 sentToClient = true;
                 log.info("📨 Сообщение отправлено клиенту {}", clientId);
             } catch (Exception e) {
@@ -787,7 +788,7 @@ public class OperatorService {
         boolean sentToClient = false;
         if (client != null && client.getChatId() != null) {
             try {
-                botService.sendMessageWithActiveChat(clientId, elder.getId(), clientResponse);
+                messageService.sendWithActiveChat(clientId, elder.getId(), clientResponse);
                 sentToClient = true;
                 log.info("📨 Пользовательское сообщение отправлено клиенту {}", clientId);
             } catch (Exception e) {
