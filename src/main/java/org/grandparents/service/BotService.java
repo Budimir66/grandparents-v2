@@ -241,7 +241,12 @@ public class BotService {
                             forward.addButtonFullRow("🏠 Главное меню", "main_menu");
 
                             messageSender.sendMessage(recipient.getChatId(), forward);
+
                             log.info("📨 [MESSAGE] Сообщение отправлено пользователю {}", recipientId);
+
+                            // Запоминаем, что получатель теперь ведёт чат по этой заявке
+                            stateService.setActiveChatElder(recipientId, elder.getId());
+                            log.info("🔗 [ACTIVE_CHAT] Установлен активный чат для userId={} на заявку {}", recipientId, elder.getId());
 
                             UniversalResponse response = new UniversalResponse(
                                     "✅ **Сообщение отправлено!**\n\n" +
