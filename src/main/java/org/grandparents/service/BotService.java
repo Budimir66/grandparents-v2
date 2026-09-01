@@ -230,47 +230,17 @@ public class BotService {
                     Long recipientId = null;
                     String recipientName = "Автор";
 
-// 1. Если есть последний отправитель, И он НЕ равен автору — отвечаем ему
-                    if (elder.getLastSenderId() != null) {
-                        User lastSender = userService.findById(elder.getLastSenderId());
-                        if (lastSender != null && lastSender.getChatId() != null) {
-                            // Проверяем, что lastSender НЕ равен автору заявки
-                            if (elder.getCreatedBy() == null || !elder.getCreatedBy().equals(elder.getLastSenderId())) {
-                                recipientId = lastSender.getTelegramId();
-                                recipientName = lastSender.getFirstName() != null ? lastSender.getFirstName() : "Последний отправитель";
-                                log.info("👤 [MESSAGE] Получатель: последний отправитель (ID={}, имя={})", recipientId, recipientName);
-                            }
+// 1. Если есть последний получатель — отвечаем ему
+                    if (elder.getLastRecipientId() != null) {
+                        User lastRecipient = userService.findById(elder.getLastRecipientId());
+                        if (lastRecipient != null && lastRecipient.getChatId() != null) {
+                            recipientId = lastRecipient.getTelegramId();
+                            recipientName = lastRecipient.getFirstName() != null ? lastRecipient.getFirstName() : "Последний получатель";
+                            log.info("👤 [MESSAGE] Получатель: последний получатель (ID={}, имя={})", recipientId, recipientName);
                         }
                     }
 
-// 2. Если нет lastSenderId, или он равен автору — ищем другого получателя
-                    if (recipientId == null) {
-                        // Проверяем, есть ли оператор, который взял заявку
-                        Long assignedOperatorId = null;
-                        if (elder.getAssignedOperatorIds() != null && !elder.getAssignedOperatorIds().isEmpty()) {
-                            String[] ids = elder.getAssignedOperatorIds().split(",");
-                            for (String id : ids) {
-                                Long operatorId = Long.parseLong(id.trim());
-                                // Пропускаем автора
-                                if (elder.getCreatedBy() != null && elder.getCreatedBy().equals(operatorId)) {
-                                    continue;
-                                }
-                                assignedOperatorId = operatorId;
-                                break;
-                            }
-                        }
-
-                        if (assignedOperatorId != null) {
-                            User assignedOperator = userService.findById(assignedOperatorId);
-                            if (assignedOperator != null && assignedOperator.getChatId() != null) {
-                                recipientId = assignedOperator.getTelegramId();
-                                recipientName = assignedOperator.getFirstName() != null ? assignedOperator.getFirstName() : "Оператор в работе";
-                                log.info("👤 [MESSAGE] Получатель: оператор в работе (ID={}, имя={})", recipientId, recipientName);
-                            }
-                        }
-                    }
-
-// 3. Если оператор не найден — отправляем автору
+// 2. Если нет lastRecipientId — ищем автора
                     if (recipientId == null && elder.getCreatedBy() != null) {
                         User author = userService.findById(elder.getCreatedBy());
                         if (author != null && author.getChatId() != null) {
@@ -280,7 +250,7 @@ public class BotService {
                         }
                     }
 
-// 4. Если автор не найден — отправляем клиенту
+// 3. Если автор не найден — клиент
                     if (recipientId == null && elder.getClientTelegramId() != null) {
                         User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
                         if (client != null && client.getChatId() != null) {

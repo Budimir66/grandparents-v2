@@ -124,6 +124,9 @@ public class Elder {
     @Column(name = "last_sender_id")
     private Long lastSenderId;
 
+    @Column(name = "last_recipient_id")
+    private Long lastRecipientId;
+
     // ===== КОНСТРУКТОРЫ =====
     public Elder() {
     }
@@ -146,6 +149,14 @@ public class Elder {
     }
 
     // ===== ГЕТТЕРЫ И СЕТТЕРЫ =====
+    public void setLastRecipientId(Long lastRecipientId) {
+        this.lastRecipientId = lastRecipientId;
+    }
+
+    public Long getLastRecipientId() {
+        return lastRecipientId;
+    }
+
     public Long getLastSenderId() {
         return lastSenderId;
     }
