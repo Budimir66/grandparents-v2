@@ -232,8 +232,11 @@ public class BotService {
                     String recipientName = "Автор";
 
 // 1. Если есть последний отправитель — отвечаем ему
+                    // 1. Если есть последний отправитель — отвечаем ему
+                    log.info("🔍 [DEBUG] lastSenderId = {}", elder.getLastSenderId());
                     if (elder.getLastSenderId() != null) {
                         User lastSender = userService.findById(elder.getLastSenderId());
+                        log.info("🔍 [DEBUG] lastSender = {}, chatId = {}", lastSender, lastSender != null ? lastSender.getChatId() : "null");
                         if (lastSender != null && lastSender.getChatId() != null) {
                             recipientId = lastSender.getTelegramId();
                             recipientName = lastSender.getFirstName() != null ? lastSender.getFirstName() : "Последний отправитель";
