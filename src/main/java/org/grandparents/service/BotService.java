@@ -49,6 +49,7 @@ public class BotService {
     private final ComplaintRepository complaintRepository;
     private final RatingRepository ratingRepository;
     private final RatingService ratingService;
+    private final MessageService messageService;
 
     public BotService(UserService userService,
                       ElderService elderService,
@@ -70,7 +71,8 @@ public class BotService {
                       BonusTransactionRepository bonusTransactionRepository,
                       ComplaintRepository complaintRepository,
                       RatingRepository ratingRepository,
-                      RatingService ratingService) {
+                      RatingService ratingService,
+                      MessageService messageService) {
         this.userService = userService;
         this.elderService = elderService;
         this.careHomeService = careHomeService;
@@ -92,6 +94,7 @@ public class BotService {
         this.complaintRepository = complaintRepository;
         this.ratingRepository = ratingRepository;
         this.ratingService = ratingService;
+        this.messageService = messageService;
     }
 
     // ============================================================
@@ -243,7 +246,7 @@ public class BotService {
 
                             // ===== ОТПРАВЛЯЕМ ЧЕРЕЗ УНИВЕРСАЛЬНЫЙ МЕТОД =====
 // Извлекаем кнопки из forward
-                            this.sendMessageWithActiveChat(recipientId, elder.getId(), forward);
+                            messageService.sendWithActiveChat(recipientId, elder.getId(), forward);
                             UniversalResponse response = new UniversalResponse(
                                     "✅ **Сообщение отправлено!**\n\n" +
                                             "📩 Получатель: " + recipientName + "\n" +
@@ -4881,39 +4884,5 @@ public class BotService {
         response.addButtonFullRow("❌ Отменить", "confirm_delete_completed_no");
         return response;
     }
-    /**
-     * Универсальный метод отправки сообщения с автоматической установкой активного чата
-     *
-     * @param recipientUserId ID получателя (telegram_id)
-     * @param elderId ID заявки, к которой относится сообщение
-     * @param message Текст сообщения
-     * @param buttons Список кнопок (может быть null)
-     */
-    /**
-     * Универсальный метод отправки сообщения с автоматической установкой активного чата
-     */
-    public void sendMessageWithActiveChat(Long recipientUserId, Long elderId, UniversalResponse response) {
-        // 1. Получаем получателя
-        User recipient = userService.findByTelegramId(recipientUserId).orElse(null);
-        if (recipient == null) {
-            log.warn("⚠️ [sendMessageWithActiveChat] Получатель {} не найден", recipientUserId);
-            return;
-        }
 
-        // 2. Проверяем наличие chat_id
-        if (recipient.getChatId() == null) {
-            log.warn("⚠️ [sendMessageWithActiveChat] У получателя {} нет chat_id", recipientUserId);
-            return;
-        }
-
-        // 3. Отправляем готовое сообщение
-        messageSender.sendMessage(recipient.getChatId(), response);
-        log.info("📨 [sendMessageWithActiveChat] Сообщение отправлено пользователю {}", recipientUserId);
-
-        // 4. Устанавливаем активный чат
-        if (elderId != null) {
-            stateService.setActiveChatElder(recipientUserId, elderId);
-            log.info("🔗 [sendMessageWithActiveChat] Установлен активный чат для userId={} на заявку {}", recipientUserId, elderId);
-        }
-    }
 }
