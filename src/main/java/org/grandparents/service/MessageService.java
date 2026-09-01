@@ -31,6 +31,7 @@ public class MessageService {
      * Отправляет сообщение получателю и устанавливает активный чат для оператора
      */
     public void sendWithActiveChat(Long senderId, Long recipientId, Long elderId, UniversalResponse response) {
+        log.info("📝 [DEBUG] sendWithActiveChat: senderId={}, recipientId={}, elderId={}", senderId, recipientId, elderId);
         // 1. Получаем получателя
         User recipient = userService.findByTelegramId(recipientId).orElse(null);
         if (recipient == null || recipient.getChatId() == null) {
@@ -67,6 +68,7 @@ public class MessageService {
         }
 
         // 7. Сохраняем последнего отправителя (опционально)
+        log.info("📝 [DEBUG] Сохраняем lastSenderId = {}", senderId);
         elder.setLastSenderId(senderId);
         elderService.updateElder(elder);
         log.info("📝 [MessageService] Последний отправитель для заявки {} установлен как {}", elderId, senderId);
