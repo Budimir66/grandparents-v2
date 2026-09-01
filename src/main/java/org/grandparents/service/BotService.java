@@ -227,20 +227,21 @@ public class BotService {
                         return response;
                     }
                     // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
+                    // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
                     Long recipientId = null;
                     String recipientName = "Автор";
 
-// 1. Если есть последний получатель — отвечаем ему
-                    if (elder.getLastRecipientId() != null) {
-                        User lastRecipient = userService.findById(elder.getLastRecipientId());
-                        if (lastRecipient != null && lastRecipient.getChatId() != null) {
-                            recipientId = lastRecipient.getTelegramId();
-                            recipientName = lastRecipient.getFirstName() != null ? lastRecipient.getFirstName() : "Последний получатель";
-                            log.info("👤 [MESSAGE] Получатель: последний получатель (ID={}, имя={})", recipientId, recipientName);
+// 1. Если есть последний отправитель — отвечаем ему
+                    if (elder.getLastSenderId() != null) {
+                        User lastSender = userService.findById(elder.getLastSenderId());
+                        if (lastSender != null && lastSender.getChatId() != null) {
+                            recipientId = lastSender.getTelegramId();
+                            recipientName = lastSender.getFirstName() != null ? lastSender.getFirstName() : "Последний отправитель";
+                            log.info("👤 [MESSAGE] Получатель: последний отправитель (ID={}, имя={})", recipientId, recipientName);
                         }
                     }
 
-// 2. Если нет lastRecipientId — ищем автора
+// 2. Если нет lastSenderId — ищем автора
                     if (recipientId == null && elder.getCreatedBy() != null) {
                         User author = userService.findById(elder.getCreatedBy());
                         if (author != null && author.getChatId() != null) {
