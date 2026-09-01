@@ -32,6 +32,12 @@ public class MessageService {
      */
     public void sendWithActiveChat(Long senderId, Long recipientId, Long elderId, UniversalResponse response) {
         log.info("📝 [DEBUG] sendWithActiveChat: senderId={}, recipientId={}, elderId={}", senderId, recipientId, elderId);
+        // Проверка: отправитель и получатель не должны совпадать
+        if (senderId.equals(recipientId)) {
+            log.error("❌ ОШИБКА: senderId == recipientId = {}", senderId);
+            throw new IllegalArgumentException("Отправитель и получатель не могут быть одним и тем же пользователем");
+        }
+
         // 1. Получаем получателя
         User recipient = userService.findByTelegramId(recipientId).orElse(null);
         if (recipient == null || recipient.getChatId() == null) {

@@ -1,5 +1,6 @@
 package org.grandparents.service;
 
+import org.grandparents.repository.ElderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.grandparents.model.CareHome;
@@ -50,6 +51,15 @@ public class UserStateService {
 
     // ===== САЙТ ПАНСИОНАТА =====
     private final Map<Long, String> tempCareHomeWebsite = new HashMap<>();
+    private final ElderRepository elderRepository;
+    private final ConcurrentHashMap<Long, Long> activeChats = new ConcurrentHashMap<>();
+
+
+    // ========конструктор
+
+    public UserStateService(ElderRepository elderRepository) {
+        this.elderRepository = elderRepository;
+    }
 
     // ===== МЕТОДЫ =====
     public void setCurrentPage(Long userId, int page) {
@@ -319,5 +329,19 @@ public class UserStateService {
         Long elderId = activeChatElder.remove(userId);
         log.info("🧹 [ACTIVE_CHAT] Очищен активный чат для userId={}, был elderId={}", userId, elderId);
     }
+    public void setActiveChat(Long userId, Long elderId) {
+        // Проверка, что пользователь действительно участвует в заявке
+        Elder elder = elderRepository.findById(elderId).orElse(null);
+        if (elder != null) {
+            Long createdBy = elder.getCreatedBy();
+            Long assignedTo = elder.getAssignedOperatorId();
 
+            if (!userId.equals(createdBy) && !userId.equals(assignedTo)) {
+                log.warn("⚠️ Пользователь {} не является участником заявки {}", userId, elderId);
+            }
+        }
+
+        activeChats.put(userId, elderId);
+        log.info("🔗 [ACTIVE_CHAT] Установлен активный чат для userId={} на заявку elderId={}", userId, elderId);
+    }
 }

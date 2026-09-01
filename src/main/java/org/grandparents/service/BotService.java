@@ -228,41 +228,71 @@ public class BotService {
                     }
                     // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
                     // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
+                    // ===== НОВАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ ПОЛУЧАТЕЛЯ =====
                     Long recipientId = null;
-                    String recipientName = "Автор";
+                    String recipientName = "Получатель";
 
-// 1. Если есть последний отправитель — отвечаем ему
-                    // 1. Если есть последний отправитель — отвечаем ему
-                    log.info("🔍 [DEBUG] lastSenderId = {}", elder.getLastSenderId());
-                    if (elder.getLastSenderId() != null) {
-                        User lastSender = userService.findById(elder.getLastSenderId());
-                        log.info("🔍 [DEBUG] lastSender = {}, chatId = {}", lastSender, lastSender != null ? lastSender.getChatId() : "null");
-                        if (lastSender != null && lastSender.getChatId() != null) {
-                            recipientId = lastSender.getTelegramId();
-                            recipientName = lastSender.getFirstName() != null ? lastSender.getFirstName() : "Последний отправитель";
-                            log.info("👤 [MESSAGE] Получатель: последний отправитель (ID={}, имя={})", recipientId, recipientName);
+// Получаем отправителя и заявку
+                    User sender = userService.findByTelegramId(userId)
+                            .orElseThrow(() -> new RuntimeException("Пользователь не найден: " + userId));
+                    elder = elderService.findById(activeElderId);
+
+                    log.info("🔍 [DEBUG] senderId={}, accessLevel={}", userId, sender.getAccessLevel());
+
+// ПРАВИЛЬНАЯ ЛОГИКА: определяем получателя на основе роли отправителя
+                    if (sender.getAccessLevel() == AccessLevel.OPERATOR) {
+                        // Если оператор пишет - отвечаем автору заявки
+                        if (elder.getCreatedBy() != null) {
+                            User author = userService.findById(elder.getCreatedBy());
+                            if (author != null && author.getChatId() != null) {
+                                recipientId = author.getTelegramId();
+                                recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
+                                log.info("👤 [MESSAGE] Оператор -> Автор (ID={}, имя={})", recipientId, recipientName);
+                            }
+                        }
+                    } else if (sender.getAccessLevel() == AccessLevel.CLIENT) {
+                        // Если клиент пишет - отвечаем назначенному оператору
+                        if (elder.getAssignedOperatorId() != null) {
+                            User operator = userService.findById(elder.getAssignedOperatorId());
+                            if (operator != null && operator.getChatId() != null) {
+                                recipientId = operator.getTelegramId();
+                                recipientName = operator.getFirstName() != null ? operator.getFirstName() : "Оператор";
+                                log.info("👤 [MESSAGE] Клиент -> Оператор (ID={}, имя={})", recipientId, recipientName);
+                            }
+                        }
+                    } else {
+                        // Fallback: используем lastSenderId/lastRecipientId
+                        log.warn("⚠️ [MESSAGE] Неизвестный AccessLevel: {}, используем fallback", sender.getAccessLevel());
+
+                        if (elder.getLastSenderId() != null) {
+                            User lastSender = userService.findById(elder.getLastSenderId());
+                            if (lastSender != null && lastSender.getChatId() != null) {
+                                recipientId = lastSender.getTelegramId();
+                                recipientName = lastSender.getFirstName() != null ? lastSender.getFirstName() : "Последний отправитель";
+                                log.info("👤 [MESSAGE] Fallback: последний отправитель (ID={})", recipientId);
+                            }
+                        } else if (elder.getCreatedBy() != null) {
+                            User author = userService.findById(elder.getCreatedBy());
+                            if (author != null && author.getChatId() != null) {
+                                recipientId = author.getTelegramId();
+                                recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
+                                log.info("👤 [MESSAGE] Fallback: автор (ID={})", recipientId);
+                            }
                         }
                     }
 
-// 2. Если нет lastSenderId — ищем автора
-                    if (recipientId == null && elder.getCreatedBy() != null) {
-                        User author = userService.findById(elder.getCreatedBy());
-                        if (author != null && author.getChatId() != null) {
-                            recipientId = author.getTelegramId();
-                            recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
-                            log.info("👤 [MESSAGE] Получатель: автор (ID={}, имя={})", recipientId, recipientName);
-                        }
+// КРИТИЧЕСКАЯ ПРОВЕРКА: не отправляем сообщение самому себе!
+                    if (recipientId == null) {
+                        log.error("❌ [MESSAGE] Не удалось определить получателя для userId={}", userId);
+                        sendErrorMessage(userId, "❌ Не удалось определить получателя сообщения");
                     }
 
-// 3. Если автор не найден — клиент
-                    if (recipientId == null && elder.getClientTelegramId() != null) {
-                        User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
-                        if (client != null && client.getChatId() != null) {
-                            recipientId = client.getTelegramId();
-                            recipientName = client.getFirstName() != null ? client.getFirstName() : "Клиент";
-                            log.info("👤 [MESSAGE] Получатель: клиент (ID={}, имя={})", recipientId, recipientName);
-                        }
+                    if (recipientId.equals(userId)) {
+                        log.error("❌ [MESSAGE] ОШИБКА: отправитель и получатель совпадают! userId={}, recipientId={}", userId, recipientId);
+                        sendErrorMessage(userId, "❌ Ошибка: вы пытаетесь отправить сообщение самому себе");
                     }
+
+                    log.info("✅ [MESSAGE] Определен получатель: ID={}, имя={}", recipientId, recipientName);
                     if (recipientId != null) {
                         User recipient = userService.findByTelegramId(recipientId).orElse(null);
                         if (recipient != null && recipient.getChatId() != null) {
@@ -4935,5 +4965,24 @@ public class BotService {
         response.addButtonFullRow("❌ Отменить", "confirm_delete_completed_no");
         return response;
     }
+    private void sendErrorMessage(Long userId, String errorText) {
+        try {
+            UniversalResponse response = new UniversalResponse();
+            response.setText(errorText);
 
+            // Добавляем кнопку "Главное меню"
+            List<UniversalResponse.Button> buttons = new ArrayList<>();
+            UniversalResponse.Button backButton = new UniversalResponse.Button();
+            backButton.setText("🏠 Главное меню");
+            backButton.setCallbackData("main_menu");
+            buttons.add(backButton);
+            response.setButtons(buttons);
+
+            messageSender.sendMessage(userId, response);
+            log.info("✅ Отправлено сообщение об ошибке пользователю {}", userId);
+
+        } catch (Exception e) {
+            log.error("❌ Не удалось отправить сообщение об ошибке пользователю {}: {}", userId, e.getMessage());
+        }
+    }
 }
