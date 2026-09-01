@@ -209,6 +209,23 @@ public class BotService {
                 if (elder != null) {
                     log.info("📤 [MESSAGE] Отправка сообщения по заявке #{} от userId={}", elder.getId(), userId);
 
+
+
+                    // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ПОЛЬЗОВАТЕЛЬ ОТПРАВИТЬ СООБЩЕНИЕ САМ СЕБЕ =====
+// Если автор заявки = текущий пользователь, и нет lastSenderId,
+// то сообщение уйдёт самому себе — блокируем это.
+                    if (elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId) && elder.getLastSenderId() == null) {
+                        log.warn("⚠️ [MESSAGE] Попытка отправить сообщение самому себе по заявке #{} от userId={}", elder.getId(), userId);
+                        UniversalResponse response = new UniversalResponse(
+                                "⚠️ **Вы не можете отправить сообщение самому себе.**\n\n" +
+                                        "📋 **Заявка #" + elder.getId() + "** создана вами.\n" +
+                                        "Чтобы связаться с оператором, заявка должна быть создана клиентом или другим оператором.\n\n" +
+                                        "📌 Если это тестовая заявка — создайте её от имени другого пользователя."
+                        );
+                        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+                        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                        return response;
+                    }
                     // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
                     Long recipientId = null;
                     String recipientName = "Автор";
