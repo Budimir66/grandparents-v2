@@ -229,27 +229,71 @@ public class BotService {
 
                     log.info("🔍 [DEBUG] senderId={}, accessLevel={}", userId, user.getAccessLevel());
 
-                    // ПРАВИЛЬНАЯ ЛОГИКА: определяем получателя на основе роли отправителя
+// ПРАВИЛЬНАЯ ЛОГИКА: определяем получателя на основе роли отправителя
                     if (user.getAccessLevel() == AccessLevel.OPERATOR) {
                         // Если оператор пишет - отвечаем автору заявки
                         log.info("🔍 [DEBUG] Оператор, ищем автора заявки, createdBy={}", elder.getCreatedBy());
 
                         if (elder.getCreatedBy() != null) {
-                            User author = userService.findById(elder.getCreatedBy());
-                            if (author != null) {
-                                if (author.getChatId() != null) {
-                                    recipientId = author.getTelegramId();
-                                    recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
-                                    log.info("👤 [MESSAGE] Оператор -> Автор (ID={}, имя={})", recipientId, recipientName);
-                                } else {
-                                    log.error("❌ [MESSAGE] У автора нет chatId!");
-                                    sendErrorMessage(userId, "❌ У автора заявки нет chat_id");
-                                    return createErrorResponse("Автор не доступен");
+                            // ЕСЛИ АВТОР = ТЕКУЩИЙ ПОЛЬЗОВАТЕЛЬ - ищем другого получателя
+                            if (elder.getCreatedBy().equals(userId)) {
+                                log.warn("⚠️ [MESSAGE] Автор заявки = текущий оператор! Ищем другого получателя...");
+
+                                // Ищем назначенного оператора (если есть другой)
+                                if (elder.getAssignedOperatorId() != null && !elder.getAssignedOperatorId().equals(userId)) {
+                                    User otherOperator = userService.findById(elder.getAssignedOperatorId());
+                                    if (otherOperator != null && otherOperator.getChatId() != null) {
+                                        recipientId = otherOperator.getTelegramId();
+                                        recipientName = otherOperator.getFirstName() != null ? otherOperator.getFirstName() : "Другой оператор";
+                                        log.info("👤 [MESSAGE] Оператор -> Другой оператор (ID={}, имя={})", recipientId, recipientName);
+                                    }
                                 }
+
+                                // Если нет другого оператора - ищем последнего отправителя
+                                if (recipientId == null && elder.getLastSenderId() != null) {
+                                    User lastSender = userService.findById(elder.getLastSenderId());
+                                    if (lastSender != null && lastSender.getChatId() != null && !lastSender.getTelegramId().equals(userId)) {
+                                        recipientId = lastSender.getTelegramId();
+                                        recipientName = lastSender.getFirstName() != null ? lastSender.getFirstName() : "Последний отправитель";
+                                        log.info("👤 [MESSAGE] Оператор -> Последний отправитель (ID={}, имя={})", recipientId, recipientName);
+                                    }
+                                }
+
+                                // Если все равно нет - ищем клиента
+                                if (recipientId == null && elder.getClientTelegramId() != null) {
+                                    User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
+                                    if (client != null && client.getChatId() != null && !client.getTelegramId().equals(userId)) {
+                                        recipientId = client.getTelegramId();
+                                        recipientName = client.getFirstName() != null ? client.getFirstName() : "Клиент";
+                                        log.info("👤 [MESSAGE] Оператор -> Клиент (ID={}, имя={})", recipientId, recipientName);
+                                    }
+                                }
+
+                                // Если совсем нет получателя - ошибка
+                                if (recipientId == null) {
+                                    log.error("❌ [MESSAGE] Нет других участников заявки #{}", elder.getId());
+                                    sendErrorMessage(userId, "❌ Нет других участников заявки для отправки сообщения");
+                                    return createErrorResponse("Нет получателя");
+                                }
+
                             } else {
-                                log.error("❌ [MESSAGE] Автор с ID {} не найден!", elder.getCreatedBy());
-                                sendErrorMessage(userId, "❌ Автор заявки не найден");
-                                return createErrorResponse("Автор не найден");
+                                // Обычный случай: автор != оператор
+                                User author = userService.findById(elder.getCreatedBy());
+                                if (author != null) {
+                                    if (author.getChatId() != null) {
+                                        recipientId = author.getTelegramId();
+                                        recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
+                                        log.info("👤 [MESSAGE] Оператор -> Автор (ID={}, имя={})", recipientId, recipientName);
+                                    } else {
+                                        log.error("❌ [MESSAGE] У автора нет chatId!");
+                                        sendErrorMessage(userId, "❌ У автора заявки нет chat_id");
+                                        return createErrorResponse("Автор не доступен");
+                                    }
+                                } else {
+                                    log.error("❌ [MESSAGE] Автор с ID {} не найден!", elder.getCreatedBy());
+                                    sendErrorMessage(userId, "❌ Автор заявки не найден");
+                                    return createErrorResponse("Автор не найден");
+                                }
                             }
                         } else {
                             log.error("❌ [MESSAGE] В заявке #{} нет createdBy!", elder.getId());
@@ -290,21 +334,20 @@ public class BotService {
 
                         if (elder.getLastSenderId() != null) {
                             User lastSender = userService.findById(elder.getLastSenderId());
-                            if (lastSender != null && lastSender.getChatId() != null) {
+                            if (lastSender != null && lastSender.getChatId() != null && !lastSender.getTelegramId().equals(userId)) {
                                 recipientId = lastSender.getTelegramId();
                                 recipientName = lastSender.getFirstName() != null ? lastSender.getFirstName() : "Последний отправитель";
                                 log.info("👤 [MESSAGE] Fallback: последний отправитель (ID={})", recipientId);
                             }
                         } else if (elder.getCreatedBy() != null) {
                             User author = userService.findById(elder.getCreatedBy());
-                            if (author != null && author.getChatId() != null) {
+                            if (author != null && author.getChatId() != null && !author.getTelegramId().equals(userId)) {
                                 recipientId = author.getTelegramId();
                                 recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
                                 log.info("👤 [MESSAGE] Fallback: автор (ID={})", recipientId);
                             }
                         }
                     }
-
                     // КРИТИЧЕСКАЯ ПРОВЕРКА: не отправляем сообщение самому себе!
                     if (recipientId == null) {
                         log.error("❌ [MESSAGE] Не удалось определить получателя для userId={}", userId);
