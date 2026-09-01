@@ -26,19 +26,27 @@ public class MessageService {
     /**
      * Отправляет сообщение получателю и устанавливает активный чат для оператора
      */
-    public void sendWithActiveChat(Long operatorId, Long elderId, UniversalResponse response) {
-        User recipient = userService.findByTelegramId(operatorId).orElse(null);
+    public void sendWithActiveChat(Long senderId, Long recipientId, Long elderId, UniversalResponse response) {
+        // 1. Отправляем сообщение получателю
+        User recipient = userService.findByTelegramId(recipientId).orElse(null);
         if (recipient == null || recipient.getChatId() == null) {
-            log.warn("⚠️ [MessageService] Не удалось отправить сообщение оператору {}", operatorId);
+            log.warn("⚠️ [MessageService] Не удалось отправить сообщение получателю {}", recipientId);
             return;
         }
 
         messageSender.sendMessage(recipient.getChatId(), response);
-        log.info("📨 [MessageService] Сообщение отправлено оператору {}", operatorId);
+        log.info("📨 [MessageService] Сообщение отправлено получателю {}", recipientId);
 
+        // 2. Устанавливаем активный чат ДЛЯ ОТПРАВИТЕЛЯ (оператора)
         if (elderId != null) {
-            userStateService.setActiveChatElder(operatorId, elderId);
-            log.info("🔗 [MessageService] Активный чат для оператора {} установлен на заявку {}", operatorId, elderId);
+            userStateService.setActiveChatElder(senderId, elderId);
+            log.info("🔗 [MessageService] Активный чат для отправителя {} установлен на заявку {}", senderId, elderId);
+        }
+
+        // 3. Устанавливаем активный чат ДЛЯ ПОЛУЧАТЕЛЯ (чтобы он мог ответить)
+        if (elderId != null) {
+            userStateService.setActiveChatElder(recipientId, elderId);
+            log.info("🔗 [MessageService] Активный чат для получателя {} установлен на заявку {}", recipientId, elderId);
         }
     }
 }

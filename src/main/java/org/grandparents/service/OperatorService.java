@@ -583,7 +583,7 @@ public class OperatorService {
         boolean sentToClient = false;
         if (client != null && client.getChatId() != null) {
             try {
-                messageService.sendWithActiveChat(clientId, elder.getId(), clientResponse);
+                messageService.sendWithActiveChat(userId, clientId, elder.getId(), clientResponse);
                 sentToClient = true;
                 log.info("📨 Сообщение отправлено клиенту {}", clientId);
             } catch (Exception e) {
@@ -788,7 +788,7 @@ public class OperatorService {
         boolean sentToClient = false;
         if (client != null && client.getChatId() != null) {
             try {
-                messageService.sendWithActiveChat(clientId, elder.getId(), clientResponse);
+                messageService.sendWithActiveChat(userId, clientId, elder.getId(), clientResponse);
                 sentToClient = true;
                 log.info("📨 Пользовательское сообщение отправлено клиенту {}", clientId);
             } catch (Exception e) {

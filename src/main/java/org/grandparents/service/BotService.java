@@ -246,7 +246,7 @@ public class BotService {
 
                             // ===== ОТПРАВЛЯЕМ ЧЕРЕЗ УНИВЕРСАЛЬНЫЙ МЕТОД =====
 // Извлекаем кнопки из forward
-                            messageService.sendWithActiveChat(recipientId, elder.getId(), forward);
+                            messageService.sendWithActiveChat(userId, recipientId, elder.getId(), forward);
                             UniversalResponse response = new UniversalResponse(
                                     "✅ **Сообщение отправлено!**\n\n" +
                                             "📩 Получатель: " + recipientName + "\n" +
