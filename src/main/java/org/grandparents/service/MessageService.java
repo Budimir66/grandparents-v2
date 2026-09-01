@@ -38,9 +38,9 @@ public class MessageService {
             return;
         }
 
-        // 2. Отправляем сообщение
-        messageSender.sendMessage(recipient.getChatId(), response);
-        log.info("📨 [MessageService] Сообщение отправлено получателю {}", recipientId);
+        // 2. Отправляем по CHAT_ID получателя
+        messageSender.sendMessage(recipient.getChatId(), response);  // ← chatId получателя
+        log.info("📨 [MessageService] Сообщение отправлено в чат {}", recipient.getChatId());
 
         // 3. Устанавливаем активный чат для отправителя
         if (elderId != null) {
@@ -54,7 +54,7 @@ public class MessageService {
             log.info("🔗 [MessageService] Активный чат для получателя {} установлен на заявку {}", recipientId, elderId);
         }
 
-        // 5. СОХРАНЯЕМ ПОСЛЕДНЕГО ОТПРАВИТЕЛЯ В ЗАЯВКЕ
+        // 5. Сохраняем последнего отправителя
         if (elderId != null) {
             Elder elder = elderService.findById(elderId);
             if (elder != null) {

@@ -335,21 +335,15 @@ public class MaxWebhookHandler {
             }
 
             // ===== ОТПРАВКА =====
+            // ===== ОТПРАВКА =====
             try {
                 api.sendMessage(messageBody)
-                        .userId(chatId)
+                        .chatId(chatId)  // ← используем chatId получателя
                         .execute();
-                log.info("✅ Ответ отправлен пользователю {}", chatId);
-            } catch (Exception e1) {
-                log.warn("⚠️ Не удалось отправить по userId, пробуем по chatId...");
-                try {
-                    api.sendMessage(messageBody)
-                            .chatId(chatId)
-                            .execute();
-                    log.info("✅ Ответ отправлен в чат {}", chatId);
-                } catch (Exception e2) {
-                    throw e2;
-                }
+                log.info("✅ Ответ отправлен в чат {}", chatId);
+            } catch (Exception e) {
+                log.error("❌ Не удалось отправить сообщение в чат {}: {}", chatId, e.getMessage());
+                throw e;
             }
 
         } catch (Exception e) {
