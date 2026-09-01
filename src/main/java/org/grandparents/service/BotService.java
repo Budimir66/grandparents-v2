@@ -3443,13 +3443,23 @@ public class BotService {
             }
 
             case "in_progress" -> {
-                List<Elder> allActive = elderService.findActiveElders(); // Все активные заявки (не COMPLETED, DELETED, EXPIRED)
+                List<Elder> allActive = elderService.findActiveElders();
                 elders = allActive.stream()
                         .filter(isOperatorAssigned)
                         .filter(elder -> elder.getCreatedBy() == null || !elder.getCreatedBy().equals(userId))
-                        // ===== ДОБАВЛЯЕМ ФИЛЬТР: ТОЛЬКО IN_PROGRESS =====
                         .filter(elder -> elder.getStatus() == ElderStatus.IN_PROGRESS)
                         .collect(Collectors.toList());
+
+                // ===== СОРТИРОВКА: НОВЫЕ СВЕРХУ =====
+                elders.sort((e1, e2) -> {
+                    LocalDateTime d1 = e1.getCreatedAt();
+                    LocalDateTime d2 = e2.getCreatedAt();
+                    if (d1 == null && d2 == null) return 0;
+                    if (d1 == null) return 1;
+                    if (d2 == null) return -1;
+                    return d2.compareTo(d1);
+                });
+
                 title = "📋 **Заявки в работе**\n\nЗаявки, которые вы взяли:";
             }
 

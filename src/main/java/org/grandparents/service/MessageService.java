@@ -28,9 +28,10 @@ public class MessageService {
      */
     public void sendWithActiveChat(Long senderId, Long recipientId, Long elderId, UniversalResponse response) {
         // 1. Отправляем сообщение получателю
+        log.info("🔍 [MessageService] Ищем пользователя с telegramId={}", recipientId);
         User recipient = userService.findByTelegramId(recipientId).orElse(null);
-        if (recipient == null || recipient.getChatId() == null) {
-            log.warn("⚠️ [MessageService] Не удалось отправить сообщение получателю {}", recipientId);
+        if (recipient == null) {
+            log.warn("⚠️ [MessageService] Пользователь с telegramId={} НЕ НАЙДЕН!", recipientId);
             return;
         }
 
