@@ -207,12 +207,19 @@ public class MaxWebhookHandler {
             }
 
             // ===== СОХРАНЯЕМ CHAT_ID В БАЗУ =====
+            // ===== СОХРАНЯЕМ CHAT_ID В БАЗУ =====
+            // ===== СОХРАНЯЕМ CHAT_ID В БАЗУ (ТОЛЬКО ДЛЯ ГОСТЕЙ) =====
             try {
                 User user = userService.findByTelegramId(Long.parseLong(userId)).orElse(null);
-                if (user != null) {
-                    user.setChatId(Long.parseLong(chatId));
-                    userService.saveUser(user);
-                    log.info("✅ Сохранен chat_id=" + chatId + " для пользователя " + userId);
+                if (user != null && user.getAccessLevel() == AccessLevel.GUEST) {
+                    // Сохраняем chat_id только если пользователь — гость и ещё не зарегистрирован
+                    if (user.getChatId() == null) {
+                        user.setChatId(Long.parseLong(chatId));
+                        userService.saveUser(user);
+                        log.info("✅ Сохранен chat_id=" + chatId + " для нового пользователя " + userId);
+                    }
+                } else if (user != null) {
+                    log.info("ℹ️ Пользователь {} уже зарегистрирован (accessLevel={}), chat_id не обновляется", userId, user.getAccessLevel());
                 }
             } catch (Exception e) {
                 System.err.println("❌ Ошибка сохранения chat_id: " + e.getMessage());
