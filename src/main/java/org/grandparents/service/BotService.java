@@ -209,11 +209,7 @@ public class BotService {
                 if (elder != null) {
                     log.info("📤 [MESSAGE] Отправка сообщения по заявке #{} от userId={}", elder.getId(), userId);
 
-
-
                     // ===== ПРОВЕРКА: НЕ ПЫТАЕТСЯ ЛИ ПОЛЬЗОВАТЕЛЬ ОТПРАВИТЬ СООБЩЕНИЕ САМ СЕБЕ =====
-// Если автор заявки = текущий пользователь, и нет lastSenderId,
-// то сообщение уйдёт самому себе — блокируем это.
                     if (elder.getCreatedBy() != null && elder.getCreatedBy().equals(userId) && elder.getLastSenderId() == null) {
                         log.warn("⚠️ [MESSAGE] Попытка отправить сообщение самому себе по заявке #{} от userId={}", elder.getId(), userId);
                         UniversalResponse response = new UniversalResponse(
@@ -226,43 +222,71 @@ public class BotService {
                         response.addButtonFullRow("🏠 Главное меню", "main_menu");
                         return response;
                     }
+
                     // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
-                    // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
-                    // ===== НОВАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ ПОЛУЧАТЕЛЯ =====
                     Long recipientId = null;
                     String recipientName = "Получатель";
 
-// Получаем отправителя и заявку
-                    User sender = userService.findByTelegramId(userId)
-                            .orElseThrow(() -> new RuntimeException("Пользователь не найден: " + userId));
-                    elder = elderService.findById(activeElderId);
+                    log.info("🔍 [DEBUG] senderId={}, accessLevel={}", userId, user.getAccessLevel());
 
-                    log.info("🔍 [DEBUG] senderId={}, accessLevel={}", userId, sender.getAccessLevel());
-
-// ПРАВИЛЬНАЯ ЛОГИКА: определяем получателя на основе роли отправителя
-                    if (sender.getAccessLevel() == AccessLevel.OPERATOR) {
+                    // ПРАВИЛЬНАЯ ЛОГИКА: определяем получателя на основе роли отправителя
+                    if (user.getAccessLevel() == AccessLevel.OPERATOR) {
                         // Если оператор пишет - отвечаем автору заявки
+                        log.info("🔍 [DEBUG] Оператор, ищем автора заявки, createdBy={}", elder.getCreatedBy());
+
                         if (elder.getCreatedBy() != null) {
                             User author = userService.findById(elder.getCreatedBy());
-                            if (author != null && author.getChatId() != null) {
-                                recipientId = author.getTelegramId();
-                                recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
-                                log.info("👤 [MESSAGE] Оператор -> Автор (ID={}, имя={})", recipientId, recipientName);
+                            if (author != null) {
+                                if (author.getChatId() != null) {
+                                    recipientId = author.getTelegramId();
+                                    recipientName = author.getFirstName() != null ? author.getFirstName() : "Автор";
+                                    log.info("👤 [MESSAGE] Оператор -> Автор (ID={}, имя={})", recipientId, recipientName);
+                                } else {
+                                    log.error("❌ [MESSAGE] У автора нет chatId!");
+                                    sendErrorMessage(userId, "❌ У автора заявки нет chat_id");
+                                    return createErrorResponse("Автор не доступен");
+                                }
+                            } else {
+                                log.error("❌ [MESSAGE] Автор с ID {} не найден!", elder.getCreatedBy());
+                                sendErrorMessage(userId, "❌ Автор заявки не найден");
+                                return createErrorResponse("Автор не найден");
                             }
+                        } else {
+                            log.error("❌ [MESSAGE] В заявке #{} нет createdBy!", elder.getId());
+                            sendErrorMessage(userId, "❌ В заявке нет автора");
+                            return createErrorResponse("Автор не указан");
                         }
-                    } else if (sender.getAccessLevel() == AccessLevel.CLIENT) {
+
+                    } else if (user.getAccessLevel() == AccessLevel.CLIENT) {
                         // Если клиент пишет - отвечаем назначенному оператору
+                        log.info("🔍 [DEBUG] Клиент, ищем оператора заявки, assignedOperatorId={}", elder.getAssignedOperatorId());
+
                         if (elder.getAssignedOperatorId() != null) {
                             User operator = userService.findById(elder.getAssignedOperatorId());
-                            if (operator != null && operator.getChatId() != null) {
-                                recipientId = operator.getTelegramId();
-                                recipientName = operator.getFirstName() != null ? operator.getFirstName() : "Оператор";
-                                log.info("👤 [MESSAGE] Клиент -> Оператор (ID={}, имя={})", recipientId, recipientName);
+                            if (operator != null) {
+                                if (operator.getChatId() != null) {
+                                    recipientId = operator.getTelegramId();
+                                    recipientName = operator.getFirstName() != null ? operator.getFirstName() : "Оператор";
+                                    log.info("👤 [MESSAGE] Клиент -> Оператор (ID={}, имя={})", recipientId, recipientName);
+                                } else {
+                                    log.error("❌ [MESSAGE] У оператора нет chatId!");
+                                    sendErrorMessage(userId, "❌ У оператора нет chat_id");
+                                    return createErrorResponse("Оператор не доступен");
+                                }
+                            } else {
+                                log.error("❌ [MESSAGE] Оператор с ID {} не найден!", elder.getAssignedOperatorId());
+                                sendErrorMessage(userId, "❌ Оператор не найден");
+                                return createErrorResponse("Оператор не найден");
                             }
+                        } else {
+                            log.error("❌ [MESSAGE] В заявке #{} нет assignedOperatorId!", elder.getId());
+                            sendErrorMessage(userId, "❌ В заявке нет назначенного оператора");
+                            return createErrorResponse("Оператор не назначен");
                         }
+
                     } else {
-                        // Fallback: используем lastSenderId/lastRecipientId
-                        log.warn("⚠️ [MESSAGE] Неизвестный AccessLevel: {}, используем fallback", sender.getAccessLevel());
+                        // Fallback: используем lastSenderId
+                        log.warn("⚠️ [MESSAGE] Неизвестный AccessLevel: {}, используем fallback", user.getAccessLevel());
 
                         if (elder.getLastSenderId() != null) {
                             User lastSender = userService.findById(elder.getLastSenderId());
@@ -281,48 +305,47 @@ public class BotService {
                         }
                     }
 
-// КРИТИЧЕСКАЯ ПРОВЕРКА: не отправляем сообщение самому себе!
+                    // КРИТИЧЕСКАЯ ПРОВЕРКА: не отправляем сообщение самому себе!
                     if (recipientId == null) {
                         log.error("❌ [MESSAGE] Не удалось определить получателя для userId={}", userId);
                         sendErrorMessage(userId, "❌ Не удалось определить получателя сообщения");
+                        return createErrorResponse("Не удалось определить получателя");
                     }
 
                     if (recipientId.equals(userId)) {
                         log.error("❌ [MESSAGE] ОШИБКА: отправитель и получатель совпадают! userId={}, recipientId={}", userId, recipientId);
                         sendErrorMessage(userId, "❌ Ошибка: вы пытаетесь отправить сообщение самому себе");
+                        return createErrorResponse("Ошибка отправки самому себе");
                     }
 
                     log.info("✅ [MESSAGE] Определен получатель: ID={}, имя={}", recipientId, recipientName);
-                    if (recipientId != null) {
-                        User recipient = userService.findByTelegramId(recipientId).orElse(null);
-                        if (recipient != null && recipient.getChatId() != null) {
-                            UniversalResponse forward = new UniversalResponse(
-                                    "📩 **Новое сообщение по заявке #" + elder.getId() + "!**\n\n" +
-                                            "👤 **Отправитель:** " + user.getFirstName() + "\n" +
-                                            "📋 **Заявка #" + elder.getId() + "**\n" +
-                                            "👤 **Подопечный:** " + elder.getFullName() + "\n\n" +
-                                            "💬 **Сообщение:**\n" + text
-                            );
-                            forward.addButtonFullRow("📋 Посмотреть заявку", "view_elder_" + elder.getId());
-                            forward.addButtonFullRow("🏠 Главное меню", "main_menu");
 
-                            // ===== ОТПРАВЛЯЕМ ЧЕРЕЗ УНИВЕРСАЛЬНЫЙ МЕТОД =====
-// Извлекаем кнопки из forward
-                            log.info("📬 [DEBUG] sendWithActiveChat: senderId={}, recipientId={}, elderId={}", userId, recipientId, elder.getId());
-                            messageService.sendWithActiveChat(userId, recipientId, elder.getId(), forward);
-                            UniversalResponse response = new UniversalResponse(
-                                    "✅ **Сообщение отправлено!**\n\n" +
-                                            "📩 Получатель: " + recipientName + "\n" +
-                                            "📋 **Заявка #" + elder.getId() + "**"
-                            );
-                            response.addButtonFullRow("📋 Мои заявки", "my_requests");
-                            response.addButtonFullRow("🏠 Главное меню", "main_menu");
-                            return response;
-                        } else {
-                            log.warn("⚠️ [MESSAGE] Получатель {} не найден или нет chatId", recipientId);
-                        }
+                    // ===== ОТПРАВЛЯЕМ СООБЩЕНИЕ =====
+                    User recipient = userService.findByTelegramId(recipientId).orElse(null);
+                    if (recipient != null && recipient.getChatId() != null) {
+                        UniversalResponse forward = new UniversalResponse(
+                                "📩 **Новое сообщение по заявке #" + elder.getId() + "!**\n\n" +
+                                        "👤 **Отправитель:** " + user.getFirstName() + "\n" +
+                                        "📋 **Заявка #" + elder.getId() + "**\n" +
+                                        "👤 **Подопечный:** " + elder.getFullName() + "\n\n" +
+                                        "💬 **Сообщение:**\n" + text
+                        );
+                        forward.addButtonFullRow("📋 Посмотреть заявку", "view_elder_" + elder.getId());
+                        forward.addButtonFullRow("🏠 Главное меню", "main_menu");
+
+                        log.info("📬 [DEBUG] sendWithActiveChat: senderId={}, recipientId={}, elderId={}", userId, recipientId, elder.getId());
+                        messageService.sendWithActiveChat(userId, recipientId, elder.getId(), forward);
+
+                        UniversalResponse response = new UniversalResponse(
+                                "✅ **Сообщение отправлено!**\n\n" +
+                                        "📩 Получатель: " + recipientName + "\n" +
+                                        "📋 **Заявка #" + elder.getId() + "**"
+                        );
+                        response.addButtonFullRow("📋 Мои заявки", "my_requests");
+                        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+                        return response;
                     } else {
-                        log.warn("⚠️ [MESSAGE] Не найден получатель для заявки #{}", elder.getId());
+                        log.warn("⚠️ [MESSAGE] Получатель {} не найден или нет chatId", recipientId);
                     }
 
                     // ===== ЕСЛИ НЕ УДАЛОСЬ ОТПРАВИТЬ — ПОКАЗЫВАЕМ ТЕЛЕФОН =====
@@ -4984,5 +5007,13 @@ public class BotService {
         } catch (Exception e) {
             log.error("❌ Не удалось отправить сообщение об ошибке пользователю {}: {}", userId, e.getMessage());
         }
+    }
+    /**
+     * Создает ответ с сообщением об ошибке и кнопкой "Главное меню"
+     */
+    private UniversalResponse createErrorResponse(String message) {
+        UniversalResponse response = new UniversalResponse("❌ " + message);
+        response.addButtonFullRow("🏠 Главное меню", "main_menu");
+        return response;
     }
 }
