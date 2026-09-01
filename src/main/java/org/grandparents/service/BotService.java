@@ -224,66 +224,63 @@ public class BotService {
                     }
 
                     // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
+                    // ===== ОПРЕДЕЛЯЕМ ПОЛУЧАТЕЛЯ =====
                     Long recipientId = null;
                     String recipientName = "Получатель";
 
                     log.info("🔍 [DEBUG] senderId={}, accessLevel={}", userId, user.getAccessLevel());
 
 // Определяем участников заявки
-                    Long participant1 = elder.getCreatedBy();        // Света (282454358)
-                    Long participant2 = elder.getAssignedOperatorId(); // Кирилл (68401908)
+                    Long participant1 = elder.getCreatedBy();        // Кирилл (68401908)
+                    Long participant2 = elder.getAssignedOperatorId(); // Света (282454358)
 
                     log.info("🔍 [DEBUG] Участники заявки: participant1={}, participant2={}", participant1, participant2);
 
 // Если отправитель = participant1, то получатель = participant2
                     if (userId.equals(participant1)) {
                         recipientId = participant2;
-                        User recipient = userService.findById(recipientId);
+                        // ИСПРАВЛЕНО: используем findByTelegramId
+                        User recipient = userService.findByTelegramId(recipientId).orElse(null);
                         if (recipient != null && recipient.getChatId() != null) {
-                            recipientName = recipient.getFirstName() != null ? recipient.getFirstName() : "Оператор";
-                            log.info("👤 [MESSAGE] {} -> {}", userId, recipientId);
+                            recipientName = recipient.getFirstName() != null ? recipient.getFirstName() : "Автор";
+                            log.info("👤 [MESSAGE] {} -> {} (chatId={})", userId, recipientId, recipient.getChatId());
                         } else {
                             log.error("❌ [MESSAGE] Получатель {} не найден или нет chatId", recipientId);
-                            sendErrorMessage(userId, "❌ Получатель не найден");
-                            return createErrorResponse("Получатель не найден");
+                            sendErrorMessage(userId, "❌ Получатель не доступен");
+                            return createErrorResponse("Получатель не доступен");
                         }
                     }
 // Если отправитель = participant2, то получатель = participant1
                     else if (userId.equals(participant2)) {
                         recipientId = participant1;
-                        User recipient = userService.findById(recipientId);
+                        // ИСПРАВЛЕНО: используем findByTelegramId
+                        User recipient = userService.findByTelegramId(recipientId).orElse(null);
                         if (recipient != null && recipient.getChatId() != null) {
-                            recipientName = recipient.getFirstName() != null ? recipient.getFirstName() : "Автор";
-                            log.info("👤 [MESSAGE] {} -> {}", userId, recipientId);
+                            recipientName = recipient.getFirstName() != null ? recipient.getFirstName() : "Оператор";
+                            log.info("👤 [MESSAGE] {} -> {} (chatId={})", userId, recipientId, recipient.getChatId());
                         } else {
                             log.error("❌ [MESSAGE] Получатель {} не найден или нет chatId", recipientId);
-                            sendErrorMessage(userId, "❌ Получатель не найден");
-                            return createErrorResponse("Получатель не найден");
+                            sendErrorMessage(userId, "❌ Получатель не доступен");
+                            return createErrorResponse("Получатель не доступен");
                         }
                     }
 // Если отправитель не участник - fallback
                     else {
                         log.warn("⚠️ [MESSAGE] Пользователь {} не является участником заявки #{}", userId, elder.getId());
 
-                        // Попробуем найти любого другого участника
                         if (participant1 != null && !participant1.equals(userId)) {
                             recipientId = participant1;
-                            User recipient = userService.findById(recipientId);
-                            if (recipient != null && recipient.getChatId() != null) {
-                                recipientName = recipient.getFirstName() != null ? recipient.getFirstName() : "Участник";
-                                log.info("👤 [MESSAGE] Fallback -> {}", recipientId);
-                            }
                         } else if (participant2 != null && !participant2.equals(userId)) {
                             recipientId = participant2;
-                            User recipient = userService.findById(recipientId);
+                        }
+
+                        if (recipientId != null) {
+                            // ИСПРАВЛЕНО: используем findByTelegramId
+                            User recipient = userService.findByTelegramId(recipientId).orElse(null);
                             if (recipient != null && recipient.getChatId() != null) {
                                 recipientName = recipient.getFirstName() != null ? recipient.getFirstName() : "Участник";
-                                log.info("👤 [MESSAGE] Fallback -> {}", recipientId);
+                                log.info("👤 [MESSAGE] Fallback -> {} (chatId={})", recipientId, recipient.getChatId());
                             }
-                        } else {
-                            log.error("❌ [MESSAGE] Нет подходящего получателя");
-                            sendErrorMessage(userId, "❌ Нет подходящего получателя");
-                            return createErrorResponse("Нет получателя");
                         }
                     }
 
@@ -301,7 +298,6 @@ public class BotService {
                     }
 
                     log.info("✅ [MESSAGE] Определен получатель: ID={}, имя={}", recipientId, recipientName);
-
                     // ===== ОТПРАВЛЯЕМ СООБЩЕНИЕ =====
                     User recipient = userService.findByTelegramId(recipientId).orElse(null);
                     if (recipient != null && recipient.getChatId() != null) {
