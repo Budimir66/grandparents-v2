@@ -565,7 +565,11 @@ public class AdminService {
             }
             response.addButtonFullRow("🏠 Главное меню", "main_menu");
 
-            Long chatId = user.getChatId() != null ? user.getChatId() : userId;
+            if (user.getChatId() == null) {
+                log.warn("⚠️ У пользователя {} нет chat_id, сообщение не отправлено", userId);
+                return;
+            }
+            Long chatId = user.getChatId();
             messageSender.sendMessage(chatId, response);
             log.info("📨 Уведомление отправлено пользователю {}", userId);
         } catch (Exception e) {

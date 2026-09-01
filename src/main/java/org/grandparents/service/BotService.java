@@ -429,6 +429,13 @@ public class BotService {
                 return;
             }
 
+            // ===== ПРОВЕРКА: ЕСТЬ ЛИ CHAT_ID =====
+            if (user.getChatId() == null) {
+                log.warn("⚠️ У пользователя {} нет подтверждённого chat_id. Сообщение не отправлено.", userId);
+                // Можно отправить уведомление оператору
+                return;
+            }
+
             UniversalResponse response = new UniversalResponse(text);
             for (int i = 0; i < buttons.length; i += 2) {
                 if (i + 1 < buttons.length) {
@@ -437,9 +444,10 @@ public class BotService {
             }
             response.addButtonFullRow("🏠 Главное меню", "main_menu");
 
-            Long chatId = user.getChatId() != null ? user.getChatId() : userId;
+            // ===== ОТПРАВЛЯЕМ ПО CHAT_ID =====
+            Long chatId = user.getChatId();  // ← СОЗДАЁМ ПЕРЕМЕННУЮ
             messageSender.sendMessage(chatId, response);
-            log.info("📨 Уведомление отправлено пользователю {}", userId);
+            log.info("📨 Уведомление отправлено пользователю {} (chat_id={})", userId, chatId);
         } catch (Exception e) {
             log.error("❌ Ошибка отправки уведомления пользователю {}: {}", userId, e.getMessage(), e);
         }
