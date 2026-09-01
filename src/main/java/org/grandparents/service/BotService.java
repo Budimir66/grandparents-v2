@@ -213,7 +213,18 @@ public class BotService {
                     Long recipientId = null;
                     String recipientName = "Автор";
 
-                    if (elder.getCreatedBy() != null) {
+// 1. Если есть последний отправитель — отвечаем ему
+                    if (elder.getLastSenderId() != null) {
+                        User lastSender = userService.findById(elder.getLastSenderId());
+                        if (lastSender != null && lastSender.getChatId() != null) {
+                            recipientId = lastSender.getTelegramId();
+                            recipientName = lastSender.getFirstName() != null ? lastSender.getFirstName() : "Последний отправитель";
+                            log.info("👤 [MESSAGE] Получатель: последний отправитель (ID={}, имя={})", recipientId, recipientName);
+                        }
+                    }
+
+// 2. Если нет lastSenderId — отвечаем автору заявки
+                    if (recipientId == null && elder.getCreatedBy() != null) {
                         User author = userService.findById(elder.getCreatedBy());
                         if (author != null && author.getChatId() != null) {
                             recipientId = author.getTelegramId();
@@ -222,6 +233,7 @@ public class BotService {
                         }
                     }
 
+// 3. Если автор не найден — отправляем клиенту
                     if (recipientId == null && elder.getClientTelegramId() != null) {
                         User client = userService.findByTelegramId(elder.getClientTelegramId()).orElse(null);
                         if (client != null && client.getChatId() != null) {

@@ -1,6 +1,7 @@
 package org.grandparents.service;
 
 import org.grandparents.dto.UniversalResponse;
+import org.grandparents.model.Elder;
 import org.grandparents.model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,40 +15,53 @@ public class MessageService {
     private final UserService userService;
     private final UserStateService userStateService;
     private final MessageSender messageSender;
+    private final ElderService elderService;
 
     public MessageService(UserService userService,
                           UserStateService userStateService,
-                          MessageSender messageSender) {
+                          MessageSender messageSender,
+                          ElderService elderService) {
         this.userService = userService;
         this.userStateService = userStateService;
         this.messageSender = messageSender;
+        this.elderService = elderService;
     }
 
     /**
      * Отправляет сообщение получателю и устанавливает активный чат для оператора
      */
     public void sendWithActiveChat(Long senderId, Long recipientId, Long elderId, UniversalResponse response) {
-        // 1. Отправляем сообщение получателю
-        log.info("🔍 [MessageService] Ищем пользователя с telegramId={}", recipientId);
+        // 1. Получаем получателя
         User recipient = userService.findByTelegramId(recipientId).orElse(null);
-        if (recipient == null) {
-            log.warn("⚠️ [MessageService] Пользователь с telegramId={} НЕ НАЙДЕН!", recipientId);
+        if (recipient == null || recipient.getChatId() == null) {
+            log.warn("⚠️ [MessageService] Не удалось отправить сообщение получателю {}", recipientId);
             return;
         }
 
+        // 2. Отправляем сообщение
         messageSender.sendMessage(recipient.getChatId(), response);
         log.info("📨 [MessageService] Сообщение отправлено получателю {}", recipientId);
 
-        // 2. Устанавливаем активный чат ДЛЯ ОТПРАВИТЕЛЯ (оператора)
+        // 3. Устанавливаем активный чат для отправителя
         if (elderId != null) {
             userStateService.setActiveChatElder(senderId, elderId);
             log.info("🔗 [MessageService] Активный чат для отправителя {} установлен на заявку {}", senderId, elderId);
         }
 
-        // 3. Устанавливаем активный чат ДЛЯ ПОЛУЧАТЕЛЯ (чтобы он мог ответить)
+        // 4. Устанавливаем активный чат для получателя
         if (elderId != null) {
             userStateService.setActiveChatElder(recipientId, elderId);
             log.info("🔗 [MessageService] Активный чат для получателя {} установлен на заявку {}", recipientId, elderId);
+        }
+
+        // 5. СОХРАНЯЕМ ПОСЛЕДНЕГО ОТПРАВИТЕЛЯ В ЗАЯВКЕ
+        if (elderId != null) {
+            Elder elder = elderService.findById(elderId);
+            if (elder != null) {
+                elder.setLastSenderId(senderId);
+                elderService.updateElder(elder);
+                log.info("📝 [MessageService] Последний отправитель для заявки {} установлен как {}", elderId, senderId);
+            }
         }
     }
 }
